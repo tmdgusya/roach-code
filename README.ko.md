@@ -58,10 +58,10 @@ irm https://raw.githubusercontent.com/tmdgusya/roach-code/main/install.ps1 | iex
 ```
 
 설치 스크립트가 OS/아키텍처를 자동으로 감지하고, release의 `SHA256SUMS`로 다운로드를
-검증한 뒤 `roach-code`를 PATH에 놓습니다. `ROACH_VERSION`, `ROACH_REPO`,
-`ROACH_INSTALL_DIR`로 재정의할 수 있습니다. 또는
+검증한 뒤 `roach-code`(및 짧은 별칭 `roach`)를 PATH에 놓습니다. `ROACH_VERSION`,
+`ROACH_REPO`, `ROACH_INSTALL_DIR`로 재정의할 수 있습니다. 또는
 [Releases](https://github.com/tmdgusya/roach-code/releases) 페이지에서 아카이브를
-직접 받아도 됩니다.
+직접 받아도 됩니다. 이미 설치돼 있다면 `roach update`로 최신 릴리스를 받습니다.
 
 ### 소스에서 빌드
 
@@ -79,6 +79,15 @@ roach-code chat                       # 이후 /init 으로 AGENTS.md(프로젝�
 roach-code run "implement the TODOs in main.go"
 roach-code run --model mimo-pro "add unit tests for this function"
 echo "explain this code" | roach-code run
+```
+
+설치된 바이너리는 짧은 별칭 **`roach`**로도 실행됩니다(예: `roach chat`). 그 외 명령:
+
+```sh
+roach-code models                 # 설정된 provider / 모델 목록
+roach-code models refresh         # provider의 /models API에서 모델 목록을 다시 가져옴
+roach-code codex login            # ChatGPT 구독으로 Codex 로그인 (OAuth)
+roach-code update                 # 최신 릴리스로 자체 업데이트
 ```
 
 ## 설정
@@ -102,7 +111,7 @@ auto_plan = "ask"                  # off|ask|on; 복잡한 chat 작업은 plan �
 name        = "deepseek-flash"
 kind        = "openai"
 base_url    = "https://api.deepseek.com"
-model       = "deepseek-chat"
+model       = "deepseek-v4-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 
 [tools]

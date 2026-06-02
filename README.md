@@ -58,9 +58,11 @@ irm https://raw.githubusercontent.com/tmdgusya/roach-code/main/install.ps1 | iex
 ```
 
 The installer detects your OS/arch, verifies the download against the release
-`SHA256SUMS`, and drops `roach-code` on your PATH. Override with `ROACH_VERSION`,
-`ROACH_REPO`, or `ROACH_INSTALL_DIR`. Or grab an archive directly from the
-[Releases](https://github.com/tmdgusya/roach-code/releases) page.
+`SHA256SUMS`, and drops `roach-code` (plus the short alias `roach`) on your PATH.
+Override with `ROACH_VERSION`, `ROACH_REPO`, or `ROACH_INSTALL_DIR`. Or grab an
+archive directly from the
+[Releases](https://github.com/tmdgusya/roach-code/releases) page. Already
+installed? `roach update` pulls the latest release.
 
 ### Build from source
 
@@ -78,6 +80,16 @@ roach-code chat                       # then run /init to generate AGENTS.md (pr
 roach-code run "implement the TODOs in main.go"
 roach-code run --model mimo-pro "add unit tests for this function"
 echo "explain this code" | roach-code run
+```
+
+Installed binaries also answer to the short alias **`roach`** (e.g. `roach chat`).
+A few more commands:
+
+```sh
+roach-code models                 # list configured providers / models
+roach-code models refresh         # re-fetch each provider's model list from its /models API
+roach-code codex login            # sign in to Codex with a ChatGPT subscription (OAuth)
+roach-code update                 # self-update to the latest release
 ```
 
 ## Configuration
@@ -101,7 +113,7 @@ auto_plan = "ask"                  # off|ask|on; complex chat tasks start in pla
 name        = "deepseek-flash"
 kind        = "openai"
 base_url    = "https://api.deepseek.com"
-model       = "deepseek-chat"
+model       = "deepseek-v4-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 
 [tools]

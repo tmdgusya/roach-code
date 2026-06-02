@@ -57,8 +57,9 @@ irm https://raw.githubusercontent.com/tmdgusya/roach-code/main/install.ps1 | iex
 ```
 
 安装脚本会自动识别系统/架构，对照 release 的 `SHA256SUMS` 校验下载，并把
-`roach-code` 放到 PATH 上。可用 `ROACH_VERSION`、`ROACH_REPO`、`ROACH_INSTALL_DIR`
-覆盖；也可直接从 [Releases](https://github.com/tmdgusya/roach-code/releases) 页面下载归档。
+`roach-code`（以及短别名 `roach`）放到 PATH 上。可用 `ROACH_VERSION`、`ROACH_REPO`、
+`ROACH_INSTALL_DIR` 覆盖；也可直接从 [Releases](https://github.com/tmdgusya/roach-code/releases)
+页面下载归档。已安装的话，`roach update` 会拉取最新版本。
 
 ### 从源码构建
 
@@ -76,6 +77,15 @@ roach-code chat                       # 然后在会话里运行 /init 生成 AG
 roach-code run "把 main.go 里的 TODO 实现掉"
 roach-code run --model mimo-pro "给这个函数补单元测试"
 echo "解释这段代码" | roach-code run
+```
+
+安装后的二进制也可用短别名 **`roach`** 运行（如 `roach chat`）。其它命令：
+
+```sh
+roach-code models                 # 列出已配置的 provider / 模型
+roach-code models refresh         # 通过 provider 的 /models 接口重新拉取模型列表
+roach-code codex login            # 用 ChatGPT 订阅登录 Codex（OAuth）
+roach-code update                 # 自更新到最新版本
 ```
 
 ## 配置
@@ -98,7 +108,7 @@ auto_plan = "ask"                  # off|ask|on；复杂聊天任务自动进入
 name        = "deepseek-flash"
 kind        = "openai"
 base_url    = "https://api.deepseek.com"
-model       = "deepseek-chat"
+model       = "deepseek-v4-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 
 [tools]
