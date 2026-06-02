@@ -1,0 +1,53 @@
+# Build artifacts
+/bin/
+/dist/
+/stage/
+/roach-code
+/roach-code.exe
+/roach
+/roach.exe
+
+# Go test/build scratch
+*.test
+*.out
+*.coverprofile
+coverage.out
+cpu.prof
+mem.prof
+
+# Wails desktop artifacts
+/desktop/build/*
+!/desktop/build/appicon.png
+/desktop/desktop
+/desktop/frontend/dist/*
+!/desktop/frontend/dist/.gitkeep
+/desktop/frontend/wailsjs/
+/desktop/frontend/package.json.md5
+
+# Environment / local config (roach-code.example.toml is the shared template)
+.env
+.env.local
+*.local
+/roach-code.toml
+/roach-code.toml.bak
+/desktop/.env
+/desktop/roach-code.toml
+
+# Node / frontend dependencies and caches
+node_modules/
+.pnpm-store/
+.npm/
+
+# Project-local Roach Code state; keep the checked-in review command.
+/.roach-code/*
+!/.roach-code/commands/
+!/.roach-code/commands/review.md
+
+# CodeGraph per-project index (rebuilt locally; never committed)
+.codegraph/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,186 @@
+# Roach Code configuration.
+# Resolution order: flag > ./roach-code.toml > ~/.config/roach-code/config.toml > built-in defaults.
+# Secrets come from the environment via api_key_env; never put keys here.
+
+default_model = "deepseek"   # a provider name (→ its default model) or "provider/model"
+# language      = "zh"   # ui language; empty = auto-detect from $LANG / $ROACH_LANG
+
+[ui]
+theme = "auto"   # auto|dark|light; controls CLI colors only; ROACH_THEME can override per run
+# theme_style = "graphite"   # graphite|ember|aurora|midnight|sandstone|porcelain|linen|glacier
+
+[agent]
+system_prompt = """
+You are Roach Code, a coding agent focused on executing code tasks.
+Use the provided tools to read and write files and run shell commands.
+Principles: understand the request before acting; verify with tools instead of
+guessing; keep changes minimal and correct; briefly summarize what you did."""
+# system_prompt_file = "prompts/system.md"   # overrides system_prompt when set
+max_steps   = 25
+temperature = 0.0
+auto_plan   = "ask"   # off|ask|on; ask/on auto-enter plan mode for complex tasks
+# auto_plan_classifier = "deepseek-flash"   # optional; only used for borderline tasks
+# planner_model = "mimo-pro"   # optional: enable two-model collaboration
+# subagent_model = "deepseek-pro"   # optional default for runAs=subagent skills
+# subagent_models = { review = "deepseek-pro", security_review = "deepseek-pro" }   # per-skill overrides
+# output_style = "explanatory"   # persona/tone folded into the prompt: explanatory | learning | concise,
+#                                  or a custom .roach-code/output-styles/<name>.md ; empty = default
+
+# A provider is a vendor endpoint (one base_url + key) that offers one or more
+# models. Use `models = [...]` to expose several under a single entry — switching
+# models reuses the same connection; no need to re-declare base_url/api_key.
+[[providers]]
+name        = "deepseek"
+kind        = "openai"
+base_url    = "https://api.deepseek.com"
+models      = ["deepseek-v4-flash", "deepseek-v4-pro"]
+default     = "deepseek-v4-flash"   # optional; defaults to the first of `models`
+api_key_env = "DEEPSEEK_API_KEY"
+context_window = 1000000
+price       = { cache_hit = 0.02, input = 1, output = 2, currency = "¥" }   # per 1M tokens
+# DeepSeek thinking is always on; effort: high | max. Omit for auto (provider default).
+effort      = "high"
+
+# A single-model provider still works (use `model = "..."`) — pick this form when a
+# model needs its own base_url / context_window / price (e.g. the two MiMo SKUs
+# below have different context windows).
+price       = { cache_hit = 0.025, input = 3, output = 6, currency = "¥" }   # per 1M tokens
+
+[[providers]]
+name           = "mimo-pro"
+kind           = "openai"
+base_url       = "https://api.xiaomimimo.com/v1"
+model          = "mimo-v2.5-pro"   # thinking-mode on by default; reasoning_content rendered dim above the answer
+api_key_env    = "MIMO_API_KEY"
+context_window = 1000000
+
+[[providers]]
+name           = "mimo-flash"
+kind           = "openai"
+base_url       = "https://api.xiaomimimo.com/v1"
+model          = "mimo-v2-flash"   # thinking-mode off by default; cheaper / faster
+api_key_env    = "MIMO_API_KEY"
+context_window = 65536
+
+# MiniMax M2 — OpenAI-compatible. Its chain-of-thought streams inline as a leading
+# <think>…</think> block, which roach-code peels into dim reasoning automatically.
+[[providers]]
+name           = "minimax-m3"
+kind           = "openai"
+base_url       = "https://api.minimax.io/v1"   # global; CN: https://api.minimaxi.com/v1
+model          = "MiniMax-M3"
+api_key_env    = "MINIMAX_API_KEY"
+context_window = 200000
+price          = { cache_hit = 0.03, input = 0.3, output = 1.2, currency = "$" }
+
+# GLM (Z.ai / Zhipu) — OpenAI-compatible. thinking = "enabled" turns on GLM's
+# reasoning (emits thinking={type:enabled}); omit it for non-thinking use. Default is
+# the Coding-Plan endpoint (coding-plan keys 429 on the general /api/paas/v4). Pay-as-
+# you-go keys: use base_url = "https://api.z.ai/api/paas/v4" (CN: open.bigmodel.cn/api/paas/v4).
+[[providers]]
+name           = "glm-5.1"
+kind           = "openai"
+base_url       = "https://api.z.ai/api/coding/paas/v4"
+model          = "glm-5.1"
+api_key_env    = "ZAI_API_KEY"
+context_window = 200000
+thinking       = "enabled"
+price          = { cache_hit = 0.11, input = 0.6, output = 2.2, currency = "$" }
+
+# OpenAI Codex — the "openai-responses" kind speaks the Responses API (/responses),
+# not chat completions.
+#   auth = "oauth"  → sign in with a ChatGPT subscription: run `roach-code codex login`
+#                     (no api_key_env needed; talks to chatgpt.com/backend-api/codex).
+#   auth = "apikey" → use OPENAI_API_KEY against api.openai.com (standard API billing).
+#   auth = ""       → auto: api key if OPENAI_API_KEY is set, else OAuth.
+# effort: low | medium | high.
+[[providers]]
+name           = "codex"
+kind           = "openai-responses"
+base_url       = "https://api.openai.com/v1"
+model          = "gpt-5.5"   # ChatGPT-account Codex model (gpt-5-codex is rejected for ChatGPT auth)
+auth           = "oauth"
+context_window = 272000
+effort         = "medium"
+price          = { cache_hit = 0.125, input = 1.25, output = 10, currency = "$" }
+
+# Same Codex model via API-key billing — a separate /model entry so you can pick
+# subscription (codex) or API key (codex-api) per turn. Shows when OPENAI_API_KEY is set.
+[[providers]]
+name           = "codex-api"
+kind           = "openai-responses"
+base_url       = "https://api.openai.com/v1"
+model          = "gpt-5.5"
+auth           = "apikey"
+api_key_env    = "OPENAI_API_KEY"
+context_window = 272000
+effort         = "medium"
+price          = { cache_hit = 0.125, input = 1.25, output = 10, currency = "$" }
+
+# Anthropic (Claude) — the "anthropic" kind speaks the Messages API directly (no
+# OpenAI shim). base_url is optional (defaults to https://api.anthropic.com). Note:
+# this provider does not enable extended thinking and does not send temperature —
+# current Claude models reject sampling params (see internal/provider/anthropic).
+[[providers]]
+name           = "claude"
+kind           = "anthropic"
+model          = "claude-opus-4-8"
+api_key_env    = "ANTHROPIC_API_KEY"
+context_window = 1000000
+price          = { cache_hit = 0.5, input = 5, output = 25, currency = "$" }   # per 1M tokens
+# Extended thinking (anthropic kind only; round-trips the signed reasoning block
+# across tool calls). Omit to disable. effort: low | medium | high | xhigh | max.
+thinking       = "adaptive"
+effort         = "high"
+
+[tools]
+enabled = []   # empty = all built-in tools
+
+# CodeGraph code intelligence (symbol/call-graph search via tree-sitter + SQLite),
+# a built-in MCP server giving the agent codegraph_* search / context / explore /
+# trace / node tools. On by default. The runtime is fetched into a per-version
+# cache on first use (auto_install); .codegraph/ is then initialised (fast) and
+# CodeGraph's daemon indexes in the background, so installs and startup stay fast
+# even on a large repo. Disable to fall back to grep/glob, turn off auto_install
+# to require an explicit `roach-code codegraph install`, or point `path` at a launcher.
+# [codegraph]
+# enabled      = true
+# auto_install = true
+# path         = ""   # empty = cache, then PATH, then a bundle beside roach-code
+
+# Skills are invokable playbooks (SKILL.md / <name>.md with frontmatter), found
+# under .roach-code/skills, .agents/skills, .agent/skills, .claude/skills (project)
+# and the same dirs under ~ (global). Built-ins (explore/research/review/security-review/test)
+# ship out of the box. The model invokes them via run_skill / explore / …; you
+# invoke them via /<name>. Manage with /skill (list, show, new, paths).
+# [skills]
+# paths = ["~/my-skills", "../shared/skills"]   # extra "custom"-scope skill roots
+
+# Hooks run shell commands around the loop (PreToolUse / PostToolUse /
+# UserPromptSubmit / Stop). They are NOT configured here — put them in
+# settings.json: ~/.roach-code/settings.json (global, always on) and
+# <project>/.roach-code/settings.json (project, runs only after `/hooks trust`).
+# Exit 0 = pass, exit 2 = block (PreToolUse / UserPromptSubmit only). Example
+# ~/.roach-code/settings.json:
+#   { "hooks": {
+#       "PreToolUse":  [ { "match": "bash", "command": "my-guard.sh" } ],
+#       "PostToolUse": [ { "match": ".*file", "command": "gofmt -w ." } ],
+#       "Stop":        [ { "command": "notify-send 'turn done'" } ] } }
+
+# A custom status line: a command whose first stdout line replaces the built-in
+# data row. It receives {"model","contextUsed","contextWindow"} as JSON on stdin.
+# [statusline]
+# command = "my-statusline.sh"
+
+# External stdio plugins (MCP-compatible); each is a standalone executable.
+# [[plugins]]
+# name    = "example"
+# command = "roach-code-plugin-example"
+# tier    = "lazy"  # eager | lazy (default) | background
+# # tier guidance:
+# #   eager      — handshake at boot; the agent waits. Use when the plugin's
+# #                tools must be in the very first turn's system prompt.
+# #   lazy       — placeholder tools (from cached schema, when present) until
+# #                the model uses them, then handshake on-demand. Default.
+# #   background — placeholder + spawn at boot in a goroutine so an idle
+# #                session warms up without blocking the user.

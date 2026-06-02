@@ -1,0 +1,260 @@
+package i18n
+
+// English is the baseline catalogue. The drift-guard test reflects over its
+// fields, so every other catalogue must populate the same set.
+var English = Messages{
+	Subtitle:        "config + plugin driven coding agent",
+	WelcomeTitleFmt: "Welcome to %s",
+	NoConfigYet:     "No configuration found yet — let's set it up.",
+	StartingChatFmt: "Starting %s…",
+	SetKeyHint:      "Set your API key, then run `roach-code chat`.",
+	ConfigLabel:     "config",
+	ModelsLabel:     "models",
+	ConfigNotFound:  "not found — using built-in defaults",
+	ConfigErrorFmt:  "%s — error: %v",
+	NoKey:           "no key",
+	Ready:           "ready",
+	GetStarted:      "Get started",
+	StepScaffold:    "scaffold roach-code.toml",
+	StepSetKey:      "set API key",
+
+	InitHint:       "Project memory (AGENTS.md) is generated in-session: run `roach-code chat`, then `/init` — the model analyzes the codebase and writes it. For configuration, use `roach-code setup`.",
+	StepSetKeyHint: "export DEEPSEEK_API_KEY=… or add to .env",
+	StepChatDesc:   "interactive session",
+	StepRunDesc:    "one-shot task",
+	HelpFooter:     "roach-code help · all commands",
+
+	ChatTip:           "Context is kept across turns. Type 'exit' or Ctrl-D to quit.",
+	TurnCancelled:     "cancelled — back to prompt",
+	NoSessionToResume: "no saved session to resume — start a new one with `roach-code chat`",
+	ResumeRequiresTTY: "--resume needs an interactive terminal; pass --continue for the most recent session",
+	PickSessionLabel:  "Resume which session?",
+
+	ResumeListHeader:    "sessions (/resume <n> to switch)",
+	ResumeBusy:          "finish or cancel the current turn before resuming",
+	ResumeBadIndexFmt:   "pick a session 1–%d (run /resume to list)",
+	ResumeAlreadyActive: "already in that session",
+	ResumedTitle:        "resumed session",
+	ResumePickTitle:     "Resume a saved session",
+	ResumePickHint:      "↑/↓ move · Enter resume · Esc cancel",
+
+	ChatThinking:           "thinking…",
+	ChatThoughtForFmt:      "thought for %ds",
+	ChatStatusThinkingFmt:  "%s thinking… (%ds · Esc cancels)",
+	ChatToolWorkingFmt:     "%s working · %ds",
+	ChatStatusIdle:         "ready",
+	ChatStatusYoloIdle:     "approvals skipped",
+	ChatStatusPlanApproval: "Enter/y approves & executes · n/Esc keeps planning · PgUp/PgDn scrolls",
+	PlanApprovalPrompt:     "Plan ready above — Enter/y to approve & execute, n/Esc to keep planning",
+	ChatStatusToolApproval: "1 approve once · 2 allow this session · 3 deny · y/a/n also work · Ctrl-C cancels turn",
+	AskTypeSomething:       "Type something else",
+	AskTypingHint:          "type below, Enter to confirm",
+	AskChatInstead:         "None — just chat",
+	ChatStatusQuestion:     "↑/↓ move · number to pick · space multi · Enter confirm · ←/→ switch · Esc cancel",
+	StatusResumePicker:     "↑/↓ move · Enter resume · Esc cancel",
+	AskSubmitTitle:         "Submit answers",
+	AskUnanswered:          "(unanswered)",
+	AskSubmitHint:          "Enter submits · ← returns to edit",
+	ToolApprovalPromptFmt:  "Permission required\n\nWill call tool %s%s.\n%s\n1. Allow once\n2. Allow similar calls this session\n3. Deny\nChoose [1/2/3] (y/a/n also work)",
+	ToolApprovalSourceFmt:  "Source: %s",
+	ToolApprovalBuiltIn:    "built-in tool",
+	ToolApprovalImageUse:   "It will read provided image input for image understanding.",
+	DiffFoldedFmt:          "… +%d more lines",
+
+	OutputStyleNone:   "no output styles available",
+	OutputStyleHeader: "output styles:",
+	OutputStyleHint:   "set agent.output_style in roach-code.toml to apply one (takes effect next session)",
+	ThemeHeader:       "themes:",
+	ThemeHint:         "switch with /theme <auto|light|dark|style>",
+	ThemeChangedFmt:   "theme switched to %s / %s",
+	ThemeUnknownFmt:   "unknown theme %q",
+
+	CompactionWorking: "compacting conversation…",
+	CompactionTitle:   "Context compacted",
+	CompactionUnit:    "messages",
+	CompactionAuto:    "auto",
+	CompactionManual:  "manual",
+
+	SlashCompactDone:   "session compacted — older middle replaced by a summary, recent turns kept",
+	SlashCompactFailed: "compaction failed",
+	SlashNewDone:       "fresh session started — previous transcript saved",
+	SlashNewFailed:     "could not start a new session",
+	SlashUnavailable:   "command unavailable in this build",
+	SlashUnknown:       "unknown command",
+	SlashTodoCleared:   "task list dismissed",
+	SlashHelp:          "commands: /compact · /new · /resume · /rewind · /tree · /branch · /switch · /todo · /verbose · /model (switch model) · /effort · /theme · /mcp · /skill · /hooks · /paste-image · /memory · /quit · /help · plus skills (/init, /explore, …)",
+	SlashPromptEmpty:   "the MCP prompt returned no content to send",
+	SlashMCPNone:       "no MCP servers configured — add a [[plugins]] entry in roach-code.toml",
+	CtrlCQuitHint:      "press Ctrl+C again to quit",
+	CompHintSlash:      "↑/↓ move · Tab/Enter select · Esc close",
+	CompHintFile:       "↑/↓ move · Tab/Enter open folder or pick file · Esc close",
+
+	CmdNew:          "fork a fresh session",
+	CmdCompact:      "compact context",
+	CmdRewind:       "rewind to an earlier turn",
+	CmdTree:         "show conversation branches",
+	CmdBranch:       "create a conversation branch",
+	CmdSwitchBranch: "switch conversation branch",
+	CmdResume:       "resume a saved session",
+	CmdModel:        "switch model",
+	CmdMemory:       "show memory files",
+	CmdForget:       "delete a saved memory",
+	CmdMcp:          "MCP servers",
+	CmdHooks:        "manage hooks",
+	CmdPasteImage:   "paste clipboard image",
+	CmdOutputStyle:  "list output styles",
+	CmdTheme:        "switch CLI theme",
+	CmdSkill:        "manage skills",
+	CmdVerbose:      "toggle thinking text",
+	CmdEffort:       "set reasoning effort",
+	CmdHelp:         "list commands",
+	CmdTodo:         "dismiss the task list",
+	CmdQuit:         "exit the session",
+	ArgSkillList:    "list skills",
+	ArgSkillShow:    "show a skill's body",
+	ArgSkillNew:     "scaffold a new skill",
+	ArgSkillPaths:   "show discovery paths",
+	ArgMcpAdd:       "connect a server",
+	ArgMcpRemove:    "disconnect a server",
+	ArgMcpList:      "show configured servers",
+	ArgMcpConnected: "connected",
+	ArgHooksList:    "list active hooks",
+	ArgHooksTrust:   "trust this project's hooks",
+	ArgModelCurrent: "current",
+	ArgEffortAuto:   "use the model default",
+	ArgEffortLow:    "lighter reasoning",
+	ArgEffortMedium: "balanced reasoning",
+	ArgEffortHigh:   "deeper reasoning",
+	ArgEffortXHigh:  "extra deep reasoning",
+	ArgEffortMax:    "maximum reasoning",
+	ArgThemeCurrent: "current",
+
+	ListModelsHeaderFmt: "models (active: %s)",
+	ListModelsHint:      "switch with the model switcher, or type /model <provider/model>",
+	ListMemoryHeader:    "memory files",
+	ListMemoryNone:      "memory: none — add with “#<note>” or run /init to generate AGENTS.md",
+	ListSkillsHeaderFmt: "skills (%d)",
+	ListSkillsNone:      "skills: none defined — invoke a built-in like /init, or author one with install_skill",
+	ListHooksHeaderFmt:  "hooks (%d active)",
+	ListHooksNone:       "hooks: none active — configure in .roach-code/settings.json (project, after trust) or ~/.roach-code/settings.json (global)",
+	ListMcpHeader:       "mcp servers",
+	ListMcpNone:         "mcp: no servers connected — add one in roach-code.toml ([[plugins]]) or a project .mcp.json",
+
+	MemoryNone:             "memory: none — add with “#<note>” or create ROACH-CODE.md in the project root",
+	MemoryLoaded:           "memory loaded:",
+	MemorySavedHeader:      "  saved memories (delete with “/forget <name>”):",
+	MemoryStoredUnderFmt:   "  stored under %s",
+	MemoryEditHint:         "edit doc files or use “#<note>”; doc edits apply next session",
+	ForgetUsage:            "usage: /forget <name> — the slug shown under “saved memories” in /memory",
+	ForgetDoneFmt:          "forgot memory: %s",
+	QuickRememberEmpty:     "nothing to remember",
+	QuickRememberDoneFmt:   "remembered → %s",
+	ModelSwitchUnavailable: "model switching is unavailable in this session",
+	ModelSwitchBusy:        "finish or cancel the current turn before switching models",
+	ModelAlreadyOnFmt:      "already on %s",
+	ModelSwitchingFmt:      "switching to %s…",
+	ModelSwitchedFmt:       "switched to %s (conversation carried over; prompt cache resets)",
+	ModelListHeader:        "models (/model <provider/model> to switch)",
+	RewindNone:             "nothing to rewind yet",
+	RewindCodeConversation: "Code + conversation",
+	RewindConversationOnly: "Conversation only",
+	RewindCodeOnly:         "Code only",
+	RewindFork:             "Fork (new branch, keep code)",
+	RewindSummarizeFrom:    "Summarize from here",
+	RewindSummarizeUpto:    "Summarize up to here",
+	RewindPickTitle:        "⟲ Rewind — pick a turn",
+	RewindPickHint:         "↑/↓ move · Enter choose · Esc close",
+	RewindRestoreTitleFmt:  "⟲ Restore to turn %d ",
+	RewindApplyHint:        "↑/↓ · Enter apply · Esc back",
+	RewindEmpty:            "(empty)",
+
+	SelectProvidersLabel:  "Select providers to enable",
+	EnterAPIKeysHeader:    "Enter API keys (Enter to skip and set later in .env):",
+	MissingKeyIntro:       "roach-code.toml is ready — just an API key away.",
+	WroteFileFmt:          "Wrote %s",
+	SetupComplete:         "Setup complete.",
+	SetupCancelled:        "setup cancelled.",
+	TryHintFmt:            "Try: %s",
+	NextHint:              "Next: set your API key (export DEEPSEEK_API_KEY=... or add to .env), then run `roach-code run \"your task\"`.",
+	ConfirmReconfigureFmt: "%s already exists. Reconfigure and overwrite?",
+	KeepingExisting:       "Keeping existing config.",
+	NotOverwritingFmt:     "%s already exists; not overwriting",
+
+	// model fetching
+	FetchingModelsFmt:          "Fetching models for %s...",
+	FetchModelsSuccessFmt:      "Found %d models for %s",
+	FetchModelsFailedFmt:       "Failed to fetch models for %s: %v",
+	FetchModelsUsingPresetsFmt: "Live fetch unavailable for %s, using preset model list",
+	SelectModelsLabel:          "Select models to enable for %s",
+	NoModelsAvailableFmt:       "%s: no models available, skipping",
+	CustomFetchEmpty:           "/models returned an empty list — falling back to manual entry",
+	AnthropicFetchEmpty:        "/models returned an empty list — Anthropic-compatible providers usually don't expose one, falling back to manual entry",
+	SkipStaleCustomEntryFmt:    "skipping stale %q entry from roach-code.toml (pointing at %s) — please remove it from [[providers]]",
+	APIKeyAlreadySetFmt:        "reusing existing value for %s",
+
+	// custom provider
+	CustomProviderLabel:  "Custom Model",
+	CustomProviderDesc:   "Add third-party OpenAI compatible model",
+	CustomAddMethodLabel: "Add third-party OpenAI compatible model - Select add method",
+	CustomMethodManual:   "Enter model name manually",
+	CustomMethodURL:      "Fetch models from URL",
+	CustomPromptModel:    "Enter model name",
+	CustomPromptBaseURL:  "Enter Base URL",
+	CustomPromptKeyEnv:   "Enter API Key env var name",
+	CustomPromptAPIKey:   "Enter API Key",
+	CustomAddedFmt:       "Added custom model: %s",
+
+	// Anthropic compatible provider
+	AnthropicProviderLabel:         "Custom Model 2",
+	AnthropicProviderDesc:          "Add third-party Anthropic compatible model",
+	AnthropicAddMethodLabel:        "Add third-party Anthropic compatible model - Select add method",
+	AnthropicMethodManual:          "Enter model name manually",
+	AnthropicMethodURL:             "Fetch models from URL",
+	AnthropicPromptModel:           "Enter model name",
+	AnthropicPromptBaseURL:         "Enter Base URL",
+	AnthropicPromptKeyEnv:          "Enter API Key env var name",
+	AnthropicPromptAPIKey:          "Enter API Key",
+	AnthropicAddedFmt:              "Added Anthropic compatible model: %s",
+	AnthropicFetchingModelsFmt:     "Fetching models for %s...",
+	AnthropicFetchModelsSuccessFmt: "Found %d models for %s",
+	AnthropicFetchModelsFailedFmt:  "Failed to fetch models for %s: %v",
+	AnthropicSelectModelsLabel:     "Select models to enable for %s",
+
+	UnknownCommandFmt:         "unknown command %q",
+	UsageRunHint:              "usage: roach-code run [--model NAME] <task>",
+	ErrorPrefix:               "error:",
+	ReconfigureOnUnknownModel: "Configured model is no longer available — re-running setup.",
+	WriteConfigErr:            "write config:",
+	WriteEnvErr:               "write .env:",
+
+	SelectOneHint:  "(↑/↓ · Enter · q to cancel)",
+	SelectManyHint: "(↑/↓ · Space · Enter · q)",
+
+	UsageBody: `roach-code — a config- and plugin-driven coding agent (multi-model)
+
+Usage:
+  roach-code chat [--model NAME] [-c|--continue] [--resume]   interactive session (multi-turn; -c resumes the latest, --resume picks one)
+  roach-code run  [--model NAME] [--max-steps N] <task>   run one task and exit
+  roach-code serve [--model NAME] [--addr HOST:PORT]      serve the session over HTTP+SSE (browser client at /)
+  roach-code setup [path]                                 interactive config wizard; writes roach-code.toml (+ .env)
+  roach-code mcp <add|remove|list>                        manage MCP servers in roach-code.toml
+  roach-code codex <login|logout|status>                  sign in to Codex with a ChatGPT subscription (OAuth)
+  roach-code models [refresh [provider]] [--dry-run]      list models, or refresh them from the provider's /models API
+  roach-code update [--check]                             self-update to the latest release (or just check)
+  roach-code doctor [--json]                              print redacted local diagnostics
+  roach-code version
+  roach-code help
+
+Examples:
+  roach-code chat
+  roach-code chat --continue
+  roach-code run "implement the TODOs in main.go"
+  roach-code run --model mimo-pro "add unit tests for this function"
+  echo "explain this code" | roach-code run
+
+Configuration:
+  Resolution: flag > ./roach-code.toml > ~/.config/roach-code/config.toml > built-in defaults
+  Secrets come from the environment via api_key_env (e.g. DEEPSEEK_API_KEY).
+  Run 'roach-code setup' to scaffold a config; see docs/SPEC.md.
+`,
+}

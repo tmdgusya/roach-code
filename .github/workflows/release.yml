@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # create the release and upload archives
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Cache hit guard
+        run: ./scripts/cache-guard.sh
+
+      - name: Build, bundle CodeGraph, and package
+        run: ./scripts/release.sh
+
+      - name: Publish GitHub release
+        run: |
+          gh release create "$VERSION" \
+            dist/SHA256SUMS dist/*.tar.gz dist/*.zip \
+            --title "$VERSION" \
+            --generate-notes

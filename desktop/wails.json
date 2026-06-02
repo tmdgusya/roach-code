@@ -1,0 +1,16 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "roach-code-desktop",
+  "outputfilename": "roach-code-desktop",
+  "frontend:install": "pnpm install",
+  "frontend:build": "pnpm build",
+  "frontend:dev:watcher": "pnpm dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "tmdgusya"
+  },
+  "info": {
+    "productName": "Roach Code",
+    "comments": "Roach Code desktop — a Wails shell around the Go kernel."
+  }
+}
