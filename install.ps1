@@ -35,7 +35,7 @@ $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
 $version = $env:ROACH_VERSION
 if (-not $version) {
   try {
-    $rel = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ 'User-Agent' = 'roach-code-install' }
+    $rel = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing -Headers @{ 'User-Agent' = 'roach-code-install' }
     $version = $rel.tag_name
   } catch { Fail "could not resolve latest release for $Repo (set ROACH_VERSION). $_" }
 }
@@ -49,19 +49,25 @@ $tmp = Join-Path ([IO.Path]::GetTempPath()) ("roach-code-" + [Guid]::NewGuid().T
 New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
   $zip = Join-Path $tmp $asset
-  Invoke-WebRequest "$base/$asset" -OutFile $zip -Headers @{ 'User-Agent' = 'roach-code-install' }
+  Invoke-WebRequest "$base/$asset" -OutFile $zip -UseBasicParsing -Headers @{ 'User-Agent' = 'roach-code-install' }
 
   # --- verify checksum (only if SHA256SUMS is published) --------------------
+  # Download to a file (not .Content): with -UseBasicParsing the body comes back
+  # as a byte[] for octet-stream assets like SHA256SUMS, which breaks string ops.
   try {
-    $sums = (Invoke-WebRequest "$base/SHA256SUMS" -Headers @{ 'User-Agent' = 'roach-code-install' }).Content
+    $sumsFile = Join-Path $tmp 'SHA256SUMS'
+    Invoke-WebRequest "$base/SHA256SUMS" -OutFile $sumsFile -UseBasicParsing -Headers @{ 'User-Agent' = 'roach-code-install' }
+    $sums = Get-Content $sumsFile -Raw
     $want = ($sums -split "`n" | Where-Object { $_ -match [regex]::Escape($asset) + '\s*$' } |
              Select-Object -First 1) -replace '\s.*$', ''
     if ($want) {
       $got = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
       if ($got -ne $want.ToLower()) { Fail "checksum mismatch for $asset (expected $want, got $got)" }
       Write-Host "install: checksum ok"
+    } else {
+      Write-Host "install: checksum skipped (asset not listed in SHA256SUMS)"
     }
-  } catch { Write-Host "install: skipping checksum (SHA256SUMS unavailable)" }
+  } catch { Write-Host "install: checksum skipped (SHA256SUMS unavailable)" }
 
   # --- extract & install ----------------------------------------------------
   Expand-Archive -Path $zip -DestinationPath $tmp -Force
