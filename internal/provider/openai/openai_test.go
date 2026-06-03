@@ -121,6 +121,44 @@ func TestBuildRequestAlwaysSerializesContent(t *testing.T) {
 	}
 }
 
+func TestBuildRequestMapsImageParts(t *testing.T) {
+	c := &client{model: "gpt-4o"}
+	req := c.buildRequest(provider.Request{Messages: []provider.Message{{
+		Role:    provider.RoleUser,
+		Content: "what is this?",
+		Parts: []provider.ContentPart{
+			{Type: "text", Text: "what is this?"},
+			{Type: "image", ImageURL: "data:image/png;base64,AAA"},
+		},
+	}}})
+
+	b, err := json.Marshal(req.Messages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw []struct {
+		Content []struct {
+			Type     string `json:"type"`
+			Text     string `json:"text"`
+			ImageURL *struct {
+				URL string `json:"url"`
+			} `json:"image_url"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatalf("unmarshal multimodal content: %v\n%s", err, b)
+	}
+	if len(raw) != 1 || len(raw[0].Content) != 2 {
+		t.Fatalf("messages json = %s", b)
+	}
+	if raw[0].Content[0].Type != "text" || raw[0].Content[0].Text != "what is this?" {
+		t.Errorf("text part = %+v", raw[0].Content[0])
+	}
+	if raw[0].Content[1].Type != "image_url" || raw[0].Content[1].ImageURL == nil || raw[0].Content[1].ImageURL.URL != "data:image/png;base64,AAA" {
+		t.Errorf("image part = %+v", raw[0].Content[1])
+	}
+}
+
 // TestStreamRepairsDanglingToolCalls reproduces and guards the DeepSeek 400
 // "An assistant message with 'tool_calls' must be followed by tool messages
 // responding to each 'tool_call_id'". A resumed/interrupted session can carry an
@@ -381,7 +419,9 @@ func TestBuildRequestPreservesEmptyIDToolResults(t *testing.T) {
 	var toolContents []string
 	for _, m := range req.Messages {
 		if m.Role == string(provider.RoleTool) {
-			toolContents = append(toolContents, m.Content)
+			if s, ok := m.Content.(string); ok {
+				toolContents = append(toolContents, s)
+			}
 		}
 	}
 	if len(toolContents) != 2 {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"roach-code/internal/control"
+	"roach-code/internal/provider"
 )
 
 // fakeRunner stands in for an agent.Runner: it records the composed input and
@@ -17,7 +18,14 @@ import (
 // observable signal.
 type fakeRunner struct{ got chan string }
 
-func (f fakeRunner) Run(_ context.Context, input string) error { f.got <- input; return nil }
+func (f fakeRunner) Run(ctx context.Context, input string) error {
+	return f.RunMessage(ctx, provider.Message{Role: provider.RoleUser, Content: input})
+}
+
+func (f fakeRunner) RunMessage(_ context.Context, msg provider.Message) error {
+	f.got <- msg.Content
+	return nil
+}
 
 func TestServeSubmitRunsAndBroadcastsTurnDone(t *testing.T) {
 	bc := NewBroadcaster()

@@ -21,7 +21,12 @@ type scriptedGoalRunner struct {
 	onRun   func(input string)
 }
 
-func (r *scriptedGoalRunner) Run(_ context.Context, input string) error {
+func (r *scriptedGoalRunner) Run(ctx context.Context, input string) error {
+	return r.RunMessage(ctx, provider.Message{Role: provider.RoleUser, Content: input})
+}
+
+func (r *scriptedGoalRunner) RunMessage(_ context.Context, msg provider.Message) error {
+	input := msg.Content
 	r.inputs = append(r.inputs, input)
 	if r.onRun != nil {
 		r.onRun(input)

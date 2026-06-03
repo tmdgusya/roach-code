@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"roach-code/internal/provider"
 )
 
 // maxFileRefBytes caps how much of an @-referenced file is injected into a
@@ -139,10 +141,67 @@ func (c *Controller) ResolveRefs(ctx context.Context, line string) (block string
 			}
 			appendRefBlock(&b, tag, `path="`+r.path+`"`, text)
 		case refImage:
-			appendRefBlock(&b, "image", `path="`+r.path+`"`, "[image attachment available at @"+r.path+"; use an image/OCR/vision MCP tool if visual understanding is needed]")
+			appendRefBlock(&b, "image", `path="`+r.path+`"`, "[image attachment available as native multimodal image input]")
 		}
 	}
 	return b.String(), errs
+}
+
+// ResolveRefMessage resolves @references into a provider.Message. Files and MCP
+// resources still become text context; image attachments become multimodal image
+// parts so vision-capable providers can inspect the pasted image bytes directly.
+func (c *Controller) ResolveRefMessage(ctx context.Context, line string) (provider.Message, []string) {
+	var b strings.Builder
+	var images []provider.ContentPart
+	var imageRefs []ref
+	var errs []string
+	for _, r := range c.detectRefs(line) {
+		switch r.kind {
+		case refResource:
+			text, err := c.host.ReadResource(ctx, r.server, r.uri)
+			if err != nil {
+				errs = append(errs, "@"+r.raw+" — "+err.Error())
+				continue
+			}
+			appendRefBlock(&b, "resource", `ref="@`+r.raw+`"`, text)
+		case refFile:
+			text, isDir, err := readFileRef(r.path)
+			if err != nil {
+				errs = append(errs, "@"+r.raw+" — "+err.Error())
+				continue
+			}
+			tag := "file"
+			if isDir {
+				tag = "dir"
+			}
+			appendRefBlock(&b, tag, `path="`+r.path+`"`, text)
+		case refImage:
+			dataURL, err := ImageDataURL(r.path)
+			if err != nil {
+				errs = append(errs, "@"+r.raw+" — "+err.Error())
+				continue
+			}
+			images = append(images, provider.ContentPart{Type: "image", ImageURL: dataURL})
+			imageRefs = append(imageRefs, r)
+		}
+	}
+	sent := labelImageRefs(line, imageRefs)
+	if block := b.String(); block != "" {
+		sent = "Referenced context:\n\n" + block + "\n\n" + sent
+	}
+	msg := provider.Message{Role: provider.RoleUser, Content: sent}
+	if len(images) > 0 {
+		msg.Parts = append([]provider.ContentPart{{Type: "text", Text: sent}}, images...)
+	}
+	return msg, errs
+}
+
+func labelImageRefs(line string, refs []ref) string {
+	out := line
+	for i, r := range refs {
+		out = strings.ReplaceAll(out, "@"+r.raw, fmt.Sprintf("[image%d]", i+1))
+	}
+	return out
 }
 
 func appendRefBlock(b *strings.Builder, tag, attr, body string) {
@@ -216,7 +275,7 @@ func readFileRef(path string) (content string, isDir bool, err error) {
 	data := buf[:n]
 
 	if mime := imageMime(data, path); mime != "" {
-		return fmt.Sprintf("[image file %s, mime=%s, %d bytes — image bytes are not inlined. Use an available MCP image/OCR/vision tool with this path when visual understanding is needed.]", path, mime, info.Size()), false, nil
+		return fmt.Sprintf("[image file %s, mime=%s, %d bytes — image bytes are not inlined.]", path, mime, info.Size()), false, nil
 	}
 	if bytes.IndexByte(data[:min(n, 8192)], 0) >= 0 {
 		return fmt.Sprintf("[binary file %s, %d bytes — not shown]", path, info.Size()), false, nil

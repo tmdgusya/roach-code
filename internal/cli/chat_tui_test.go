@@ -24,6 +24,67 @@ func (r *blockingTurnRunner) Run(ctx context.Context, _ string) error {
 	return ctx.Err()
 }
 
+func (r *blockingTurnRunner) RunMessage(ctx context.Context, _ provider.Message) error {
+	return r.Run(ctx, "")
+}
+
+type capturingTurnRunner struct {
+	msgs chan provider.Message
+}
+
+func (r *capturingTurnRunner) Run(ctx context.Context, input string) error {
+	return r.RunMessage(ctx, provider.Message{Role: provider.RoleUser, Content: input})
+}
+
+func (r *capturingTurnRunner) RunMessage(_ context.Context, msg provider.Message) error {
+	r.msgs <- msg
+	return nil
+}
+
+const cliTinyPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+func TestRefsResolvedImageTurnSendsNativeImageParts(t *testing.T) {
+	t.Chdir(t.TempDir())
+	imagePath, err := control.SaveImageDataURL("data:image/png;base64," + cliTinyPNG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &capturingTurnRunner{msgs: make(chan provider.Message, 1)}
+	ctrl := control.New(control.Options{Runner: runner, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
+	m := newTestChatTUI()
+	m.ctrl = ctrl
+
+	resolveCmd := m.resolveRefs("describe @"+imagePath, "describe [image #1]", "describe [image #1]")
+	resolved, ok := resolveCmd().(refsResolvedMsg)
+	if !ok {
+		t.Fatalf("resolveRefs returned %T, want refsResolvedMsg", resolveCmd())
+	}
+	if len(resolved.msg.Parts) != 2 || resolved.msg.Parts[1].Type != "image" {
+		t.Fatalf("resolved message parts = %+v, want text + image", resolved.msg.Parts)
+	}
+
+	_, turnCmd := m.update(resolved)
+	if turnCmd == nil {
+		t.Fatal("refsResolvedMsg should start a turn")
+	}
+	_ = turnCmd()
+
+	select {
+	case msg := <-runner.msgs:
+		if strings.Contains(msg.Content, imagePath) {
+			t.Fatalf("content = %q, must not include attachment path %q", msg.Content, imagePath)
+		}
+		if !strings.Contains(msg.Content, "describe [image1]") {
+			t.Fatalf("content = %q, want sanitized image label", msg.Content)
+		}
+		if len(msg.Parts) != 2 || msg.Parts[0].Type != "text" || msg.Parts[1].Type != "image" {
+			t.Fatalf("sent parts = %+v, want text + image", msg.Parts)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("runner did not receive multimodal message")
+	}
+}
+
 // TestEscCancelsRunningTurnWithCompletionOpen reproduces the report that Esc
 // (unlike Ctrl+C) did not stop a running turn: an active completion menu
 // captured Esc to close itself and returned before reaching the running-turn

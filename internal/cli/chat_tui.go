@@ -854,11 +854,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, e := range msg.errs {
 			m.notice(e) // surface a fetch failure but still send the turn
 		}
-		sent := msg.sent
-		if msg.block != "" {
-			sent = "Referenced context:\n\n" + msg.block + "\n\n" + msg.sent
-		}
-		cmds = append(cmds, m.startTurnWithRaw(sent, msg.display, msg.restore, msg.restore))
+		cmds = append(cmds, m.startMessageTurnWithRaw(msg.msg, msg.display, msg.restore, msg.restore))
 
 	case clipboardImageMsg:
 		if msg.err != nil {

@@ -34,7 +34,7 @@ func TestFlattenPrompt(t *testing.T) {
 			want: "only this",
 		},
 		{
-			name: "image and audio blocks are ignored",
+			name: "image blocks become parts and audio blocks are ignored",
 			blocks: []ContentBlock{
 				{Type: "image", MimeType: "image/png", Data: "base64"},
 				{Type: "text", Text: "kept"},
@@ -55,8 +55,16 @@ func TestFlattenPrompt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := FlattenPrompt(tt.blocks); got != tt.want {
-				t.Errorf("FlattenPrompt() = %q, want %q", got, tt.want)
+			txt, parts := FlattenPrompt(tt.blocks)
+			if txt != tt.want {
+				t.Errorf("FlattenPrompt() text = %q, want %q", txt, tt.want)
+			}
+			if tt.name == "image blocks become parts and audio blocks are ignored" {
+				if len(parts) != 2 || parts[0].Type != "text" || parts[0].Text != "kept" || parts[1].Type != "image" || parts[1].ImageURL != "data:image/png;base64,base64" {
+					t.Errorf("FlattenPrompt() parts = %+v, want text + image", parts)
+				}
+			} else if len(parts) != 0 {
+				t.Errorf("FlattenPrompt() parts = %+v, want none", parts)
 			}
 		})
 	}

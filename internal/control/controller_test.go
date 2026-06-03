@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,7 +25,11 @@ type appendingRunner struct {
 }
 
 func (r appendingRunner) Run(_ context.Context, input string) error {
-	r.session.Add(provider.Message{Role: provider.RoleUser, Content: input})
+	return r.RunMessage(context.Background(), provider.Message{Role: provider.RoleUser, Content: input})
+}
+
+func (r appendingRunner) RunMessage(_ context.Context, msg provider.Message) error {
+	r.session.Add(msg)
 	return nil
 }
 
@@ -74,6 +79,44 @@ func TestRunTurnSnapshotsActivityWhenTranscriptChanges(t *testing.T) {
 	if meta.UpdatedAt.IsZero() {
 		t.Fatal("activity meta should be marked")
 	}
+}
+
+func TestRunMessagePrependsComposedTextPartForImageOnlyParts(t *testing.T) {
+	runner := &messageCapturingRunner{}
+	c := New(Options{Runner: runner})
+	c.QueueMemory("fresh note")
+
+	err := c.RunMessage(context.Background(), provider.Message{
+		Role:    provider.RoleUser,
+		Content: "describe",
+		Parts:   []provider.ContentPart{{Type: "image", ImageURL: "data:image/png;base64,AAA"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.msgs) != 1 {
+		t.Fatalf("messages = %d, want 1", len(runner.msgs))
+	}
+	msg := runner.msgs[0]
+	if len(msg.Parts) != 2 || msg.Parts[0].Type != "text" || msg.Parts[1].Type != "image" {
+		t.Fatalf("parts = %+v, want leading text plus preserved image", msg.Parts)
+	}
+	if msg.Parts[0].Text != msg.Content || !strings.Contains(msg.Parts[0].Text, "fresh note") || !strings.Contains(msg.Parts[0].Text, "describe") {
+		t.Fatalf("text part/content not composed together: content=%q parts=%+v", msg.Content, msg.Parts)
+	}
+}
+
+type messageCapturingRunner struct {
+	msgs []provider.Message
+}
+
+func (r *messageCapturingRunner) Run(ctx context.Context, input string) error {
+	return r.RunMessage(ctx, provider.Message{Role: provider.RoleUser, Content: input})
+}
+
+func (r *messageCapturingRunner) RunMessage(_ context.Context, msg provider.Message) error {
+	r.msgs = append(r.msgs, msg)
+	return nil
 }
 
 func TestSnapshotDoesNotRefreshSessionActivity(t *testing.T) {

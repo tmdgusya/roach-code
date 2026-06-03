@@ -9,6 +9,7 @@ import (
 
 	"roach-code/internal/control"
 	"roach-code/internal/event"
+	"roach-code/internal/provider"
 )
 
 // TestBannerGlowAnimatesIn256 guards the real-world bug: on a 256-colour terminal the
@@ -36,7 +37,8 @@ func TestBannerGlowAnimatesIn256(t *testing.T) {
 
 type noopGlowRunner struct{}
 
-func (noopGlowRunner) Run(_ context.Context, _ string) error { return nil }
+func (noopGlowRunner) Run(_ context.Context, _ string) error                  { return nil }
+func (noopGlowRunner) RunMessage(_ context.Context, _ provider.Message) error { return nil }
 
 // glowTestEnv enables truecolor + a known theme for a banner test, restoring all
 // global state on cleanup so it never pollutes the rest of the suite.

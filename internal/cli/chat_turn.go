@@ -9,6 +9,7 @@ import (
 
 	"roach-code/internal/event"
 	"roach-code/internal/i18n"
+	"roach-code/internal/provider"
 )
 
 // cycleMode toggles normal ↔ YOLO (Shift+Tab). YOLO auto-approves every tool
@@ -29,6 +30,10 @@ func (m *chatTUI) startTurn(sent, displayed, restore string) tea.Cmd {
 // startTurnWithRaw is startTurn plus an explicit `raw` typed input for callers
 // that resolve @-references before sending the model input.
 func (m *chatTUI) startTurnWithRaw(sent, displayed, restore, raw string) tea.Cmd {
+	return m.startMessageTurnWithRaw(provider.Message{Role: provider.RoleUser, Content: sent}, displayed, restore, raw)
+}
+
+func (m *chatTUI) startMessageTurnWithRaw(msg provider.Message, displayed, restore, raw string) tea.Cmd {
 	// Flush any half-streamed leftover before the new turn (defensive).
 	m.commitReasoning()
 	m.commitPending()
@@ -61,7 +66,7 @@ func (m *chatTUI) startTurnWithRaw(sent, displayed, restore, raw string) tea.Cmd
 	m.turnTokens = 0
 	// The controller owns the run goroutine, its context, and cancellation; it
 	// streams events to eventCh and emits TurnDone when the turn settles.
-	m.ctrl.SendWithRaw(sent, raw)
+	m.ctrl.SendMessageWithRaw(msg, raw)
 	return tea.Batch(m.spinner.Tick, elapsedTick())
 }
 

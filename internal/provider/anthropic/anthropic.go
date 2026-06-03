@@ -215,9 +215,7 @@ func (c *client) buildRequest(req provider.Request) anthRequest {
 				system = append(system, textBlock{Type: "text", Text: m.Content})
 			}
 		case provider.RoleUser:
-			if m.Content != "" {
-				appendBlocks("user", contentBlock{Type: "text", Text: m.Content})
-			}
+			appendBlocks("user", anthropicContentParts(m)...)
 		case provider.RoleTool:
 			content := m.Content
 			if content == "" {
@@ -294,6 +292,50 @@ func (c *client) buildRequest(req provider.Request) anthRequest {
 		}
 	}
 	return r
+}
+
+// anthropicContentParts maps transport-agnostic multimodal message parts to
+// Anthropic content blocks. If Parts is empty, Content is sent as the text
+// fallback; otherwise Parts is authoritative so the text is not duplicated.
+func anthropicContentParts(m provider.Message) []contentBlock {
+	if len(m.Parts) == 0 {
+		if m.Content == "" {
+			return nil
+		}
+		return []contentBlock{{Type: "text", Text: m.Content}}
+	}
+	blocks := make([]contentBlock, 0, len(m.Parts))
+	for _, p := range m.Parts {
+		switch p.Type {
+		case "text":
+			if p.Text != "" {
+				blocks = append(blocks, contentBlock{Type: "text", Text: p.Text})
+			}
+		case "image":
+			if src := anthropicImageSource(p.ImageURL); src != nil {
+				blocks = append(blocks, contentBlock{Type: "image", Source: src})
+			}
+		}
+	}
+	if len(blocks) == 0 && m.Content != "" {
+		return []contentBlock{{Type: "text", Text: m.Content}}
+	}
+	return blocks
+}
+
+func anthropicImageSource(imageURL string) *imageSource {
+	if imageURL == "" {
+		return nil
+	}
+	const marker = ";base64,"
+	if strings.HasPrefix(imageURL, "data:") {
+		i := strings.Index(imageURL, marker)
+		if i <= len("data:") {
+			return nil
+		}
+		return &imageSource{Type: "base64", MediaType: imageURL[len("data:"):i], Data: imageURL[i+len(marker):]}
+	}
+	return &imageSource{Type: "url", URL: imageURL}
 }
 
 // readStream parses the Messages API SSE stream into Chunks. Text deltas emit live;
@@ -470,6 +512,7 @@ type anthMessage struct {
 type contentBlock struct {
 	Type         string          `json:"type"`
 	Text         string          `json:"text,omitempty"`        // text
+	Source       *imageSource    `json:"source,omitempty"`      // image
 	Thinking     string          `json:"thinking,omitempty"`    // thinking
 	Signature    string          `json:"signature,omitempty"`   // thinking
 	ID           string          `json:"id,omitempty"`          // tool_use
@@ -478,6 +521,13 @@ type contentBlock struct {
 	ToolUseID    string          `json:"tool_use_id,omitempty"` // tool_result
 	Content      string          `json:"content,omitempty"`     // tool_result
 	CacheControl *cacheControl   `json:"cache_control,omitempty"`
+}
+
+type imageSource struct {
+	Type      string `json:"type"`                 // base64 | url
+	MediaType string `json:"media_type,omitempty"` // base64
+	Data      string `json:"data,omitempty"`       // base64
+	URL       string `json:"url,omitempty"`        // url
 }
 
 type anthTool struct {
