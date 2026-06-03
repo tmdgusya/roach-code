@@ -135,6 +135,25 @@ func TestIngestEventRoutesByKind(t *testing.T) {
 	}
 }
 
+func TestConsecutiveReadDispatchesRollUpToLatestPath(t *testing.T) {
+	m := newTestChatTUI()
+
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{Name: "read_file", Args: `{"path":"a.go"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{Name: "read_file", Output: "a"}})
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{Name: "read_file", Args: `{"path":"b.go"}`}})
+
+	joined := strings.Join(m.transcript, "\n")
+	if strings.Contains(joined, "a.go") {
+		t.Fatalf("consecutive read_file calls should rewrite the read card, transcript=%v", m.transcript)
+	}
+	if got := strings.Count(joined, "Read"); got != 1 {
+		t.Fatalf("consecutive read_file calls should leave one Read card, got %d: %v", got, m.transcript)
+	}
+	if !strings.Contains(joined, "b.go") {
+		t.Fatalf("read rollup should show the latest path, transcript=%v", m.transcript)
+	}
+}
+
 func TestIngestEventShowsReasoningInVerboseMode(t *testing.T) {
 	m := newTestChatTUI()
 	m.showReasoning = true

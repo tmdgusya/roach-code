@@ -26,6 +26,7 @@ func newTestChatTUI() chatTUI {
 		reasoningTextIdx:     -1,
 		answerIdx:            -1,
 		toolStreamIdx:        -1,
+		readRollupIdx:        -1,
 		reasoning:            &strings.Builder{},
 		pending:              &strings.Builder{},
 		pendingCommit:        &commit,
