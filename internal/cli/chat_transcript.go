@@ -69,22 +69,42 @@ func (m *chatTUI) commitSpacer() {
 	}
 }
 
+// panelRowCount is the number of terminal rows a rendered panel occupies: 0 when
+// empty, otherwise its newline count + 1. It is the single source of the
+// bottom-region row arithmetic shared by bottomRows and View (via appendPanel),
+// so the viewport height budget and the layout that fills it can never drift.
+func panelRowCount(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
+}
+
+// appendPanel appends a non-empty rendered panel to parts and adds its row count
+// to *rows — the per-panel step View repeats for each panel pinned above the
+// input box.
+func appendPanel(parts *[]string, rows *int, s string) {
+	if s == "" {
+		return
+	}
+	*parts = append(*parts, s)
+	*rows += panelRowCount(s)
+}
+
 // bottomRows is the terminal-row height of the pinned bottom region: any open
 // panels (todo / approval / chooser / rewind / completion), the input box (its
 // line count plus top+bottom border), and the two fixed status rows.
+//
+// NOTE: this set mirrors the panels View pins above the box, MINUS
+// renderResumePicker — which View also draws but bottomRows has never counted.
+// Kept as-is to preserve the existing layout; reconciling that omission would be
+// a separate, visually-verified behaviour change, not part of this dedup.
 func (m chatTUI) bottomRows() int {
-	rows := 0
-	for _, s := range []string{
-		m.renderTodoPanel(),
-		m.renderApprovalBanner(),
-		m.renderChooser(),
-		m.renderRewind(),
-		m.renderCompletion(),
-	} {
-		if s != "" {
-			rows += strings.Count(s, "\n") + 1
-		}
-	}
+	rows := panelRowCount(m.renderTodoPanel()) +
+		panelRowCount(m.renderApprovalBanner()) +
+		panelRowCount(m.renderChooser()) +
+		panelRowCount(m.renderRewind()) +
+		panelRowCount(m.renderCompletion())
 	if m.state == tuiRunning {
 		rows++ // the working spinner line above the box
 	}

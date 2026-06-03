@@ -1063,30 +1063,14 @@ func (m chatTUI) View() tea.View {
 	// the viewport above fills exactly the rest of the screen.
 	var parts []string
 	rowsAboveBox := 0 // terminal rows occupied by todo/banner/menu before the input box
-	if todo := m.renderTodoPanel(); todo != "" {
-		parts = append(parts, todo)
-		rowsAboveBox += strings.Count(todo, "\n") + 1
-	}
-	if banner := m.renderApprovalBanner(); banner != "" {
-		parts = append(parts, banner)
-		rowsAboveBox += strings.Count(banner, "\n") + 1
-	}
-	if card := m.renderChooser(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
-	}
-	if card := m.renderRewind(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
-	}
-	if card := m.renderResumePicker(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
-	}
-	if menu := m.renderCompletion(); menu != "" {
-		parts = append(parts, menu)
-		rowsAboveBox += strings.Count(menu, "\n") + 1
-	}
+	// Each pinned panel appends itself and adds its rows via appendPanel; the row
+	// formula lives once in panelRowCount so this layout and bottomRows can't drift.
+	appendPanel(&parts, &rowsAboveBox, m.renderTodoPanel())
+	appendPanel(&parts, &rowsAboveBox, m.renderApprovalBanner())
+	appendPanel(&parts, &rowsAboveBox, m.renderChooser())
+	appendPanel(&parts, &rowsAboveBox, m.renderRewind())
+	appendPanel(&parts, &rowsAboveBox, m.renderResumePicker())
+	appendPanel(&parts, &rowsAboveBox, m.renderCompletion())
 	// Layout: the working spinner (when running) above the box; the input box; then
 	// the two status rows (line 1 = mode + shortcuts/state, line 2 = live data).
 	// Each row is clamped to width independently so neither wraps; padding to full
