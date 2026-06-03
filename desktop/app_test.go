@@ -9,6 +9,7 @@ import (
 
 	"roach-code/internal/config"
 	"roach-code/internal/control"
+	"roach-code/internal/provider"
 )
 
 func TestCommandsIncludesEffortNotThinking(t *testing.T) {
@@ -122,6 +123,10 @@ func (r *blockingRunner) Run(ctx context.Context, _ string) error {
 	case <-r.release:
 		return nil
 	}
+}
+
+func (r *blockingRunner) RunMessage(ctx context.Context, _ provider.Message) error {
+	return r.Run(ctx, "")
 }
 
 func waitNotRunning(t *testing.T, ctrl *control.Controller) {
