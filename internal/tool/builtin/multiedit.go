@@ -97,7 +97,7 @@ func (m multiEdit) Execute(ctx context.Context, args json.RawMessage) (string, e
 		if step.ReplaceAll {
 			count := strings.Count(content, step.OldString)
 			if count == 0 {
-				return "", fmt.Errorf("edit %d: old_string not found", i+1)
+				return "", fmt.Errorf("edit %d: old_string not found — it may not exist, its whitespace/indentation may differ, or an earlier edit in this same call already changed that text; re-read with read_file and copy the exact text", i+1)
 			}
 			content = strings.ReplaceAll(content, step.OldString, step.NewString)
 			applied += count
@@ -105,7 +105,7 @@ func (m multiEdit) Execute(ctx context.Context, args json.RawMessage) (string, e
 		}
 		switch strings.Count(content, step.OldString) {
 		case 0:
-			return "", fmt.Errorf("edit %d: old_string not found", i+1)
+			return "", fmt.Errorf("edit %d: old_string not found — it may not exist, its whitespace/indentation may differ, or an earlier edit in this same call already changed that text; re-read with read_file and copy the exact text", i+1)
 		case 1:
 			content = strings.Replace(content, step.OldString, step.NewString, 1)
 			applied++

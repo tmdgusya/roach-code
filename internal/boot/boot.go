@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -126,6 +128,13 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	if st, ok := outputstyle.Resolve(cfg.Agent.OutputStyle, outputstyle.Dirs()); ok {
 		sysPrompt = outputstyle.Apply(sysPrompt, st)
 	}
+	// Operating discipline (how to USE the tools well) and the static environment
+	// facts fold into the cache-stable prefix here — durable English text reused
+	// every turn at no per-turn cost. They sit after any output-style block (so a
+	// "replace" persona still gets them) and before memory/skills. Volatile facts
+	// (git status, changed files) deliberately stay OUT of the prefix.
+	sysPrompt += "\n\n" + config.AgentOperatingGuide
+	sysPrompt += "\n\n" + environmentBlock()
 	sysPrompt += "\n\n" + config.LanguagePolicy
 
 	// Persistent memory (ROACH-CODE.md / AGENTS.md hierarchy + auto-memory index)
@@ -504,6 +513,28 @@ func subagentModelKeys(name string) []string {
 		}
 	}
 	return keys
+}
+
+// environmentBlock returns the static environment facts folded into the
+// cache-stable prefix: things that don't change within a session (OS, working
+// directory, whether this is a git repo) plus the date at day granularity — a
+// deliberate once-a-day prefix refresh, since knowing "today" is worth one cache
+// miss per day. Volatile facts (git branch/status, changed files) are excluded
+// on purpose so they never bust the prefix; surface those per-turn if needed.
+func environmentBlock() string {
+	cwd, err := os.Getwd()
+	if err != nil || cwd == "" {
+		cwd = "(unknown)"
+	}
+	var b strings.Builder
+	b.WriteString("## Environment\n")
+	fmt.Fprintf(&b, "- OS: %s\n", runtime.GOOS)
+	fmt.Fprintf(&b, "- Working directory: %s\n", cwd)
+	fmt.Fprintf(&b, "- Today's date: %s", time.Now().Format("2006-01-02"))
+	if _, statErr := os.Stat(filepath.Join(cwd, ".git")); statErr == nil {
+		b.WriteString("\n- This is a git repository")
+	}
+	return b.String()
 }
 
 // NewProvider builds a provider.Provider from a configured entry. Exported so

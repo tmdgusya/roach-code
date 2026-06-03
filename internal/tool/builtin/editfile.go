@@ -58,16 +58,17 @@ func (e editFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 
 	switch strings.Count(content, p.OldString) {
 	case 0:
-		return "", fmt.Errorf("old_string not found in %s", p.Path)
+		return "", fmt.Errorf("old_string not found in %s — the file may have changed, or its whitespace/indentation differs from old_string. Re-read the file with read_file and copy the exact text (including leading spaces) before retrying", p.Path)
 	case 1:
 		// ok
 	default:
-		return "", fmt.Errorf("old_string is not unique in %s; add more surrounding context", p.Path)
+		return "", fmt.Errorf("old_string is not unique in %s; add more surrounding context so it matches exactly once", p.Path)
 	}
 
+	line := 1 + strings.Count(content[:strings.Index(content, p.OldString)], "\n")
 	updated := strings.Replace(content, p.OldString, p.NewString, 1)
 	if err := writeFileEncoded(p.Path, updated, enc); err != nil {
 		return "", fmt.Errorf("write %s: %w", p.Path, err)
 	}
-	return fmt.Sprintf("edited %s", p.Path), nil
+	return fmt.Sprintf("edited %s — replaced 1 occurrence at line %d", p.Path, line), nil
 }

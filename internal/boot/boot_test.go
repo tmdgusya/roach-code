@@ -217,15 +217,21 @@ api_key_env = "ROACH_TEST_KEY_UNSET"
 	// the configured prompt — i.e. no *project/ancestor* memory leaked in. (A
 	// user-global ROACH-CODE.md in the real config dir could append; the test
 	// environment has none, so the base stands alone.)
-	base := sys
+	// Skills always append a "# Skills" index; cut it so the rest is about memory.
+	preSkills := sys
 	if i := strings.Index(sys, "\n\n# Skills"); i >= 0 {
-		base = sys[:i]
+		preSkills = sys[:i]
 	}
-	// The language policy is always appended at boot; strip it so this assertion
-	// is purely about whether project/ancestor memory leaked into the base.
-	base = stripLanguagePolicy(base)
-	if base != "JUST THE BASE" {
-		t.Fatalf("expected untouched base prompt, got:\n%s", sys)
+	// The base persona still leads the prefix (now followed by the operating guide
+	// and the environment block). The actual point of this test: no project or
+	// ancestor memory leaked in — with none present the prefix ends at the language
+	// policy, because memory, when any, is appended after it and before the skills
+	// index. A leak would push something past the language policy.
+	if !strings.HasPrefix(preSkills, "JUST THE BASE") {
+		t.Fatalf("base persona should lead the prompt, got:\n%s", sys)
+	}
+	if !strings.HasSuffix(strings.TrimSpace(preSkills), strings.TrimSpace(config.LanguagePolicy)) {
+		t.Fatalf("expected no memory between the language policy and the skills index, got:\n%s", sys)
 	}
 }
 
@@ -268,16 +274,6 @@ func systemMessage(msgs []provider.Message) string {
 		}
 	}
 	return ""
-}
-
-func stripLanguagePolicy(s string) string {
-	s = strings.TrimSpace(s)
-	for _, policy := range []string{
-		config.LanguagePolicy,
-	} {
-		s = strings.TrimSpace(strings.TrimSuffix(s, policy))
-	}
-	return s
 }
 
 func writeFile(t *testing.T, dir, name, body string) {
