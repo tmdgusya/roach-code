@@ -63,6 +63,10 @@ func (c *Coordinator) Run(ctx context.Context, input string) error {
 // parts to the executor so pasted images still reach a vision-capable model.
 func (c *Coordinator) RunMessage(ctx context.Context, msg provider.Message) error {
 	c.sink.Emit(event.Event{Kind: event.TurnStarted})
+	if messageHasImagePart(msg) {
+		c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.prov.Name() + " · executing"})
+		return c.executor.RunMessage(ctx, msg)
+	}
 	c.sink.Emit(event.Event{Kind: event.Phase, Text: c.planner.Name() + " · planning"})
 	plan, err := c.plan(ctx, msg.Content)
 	if err != nil {
@@ -72,6 +76,15 @@ func (c *Coordinator) RunMessage(ctx context.Context, msg provider.Message) erro
 	msg.Content = formatHandoff(msg.Content, plan)
 	ensureCoordinatorTextPart(&msg)
 	return c.executor.RunMessage(ctx, msg)
+}
+
+func messageHasImagePart(msg provider.Message) bool {
+	for _, p := range msg.Parts {
+		if p.Type == "image" && p.ImageURL != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func ensureCoordinatorTextPart(msg *provider.Message) {
