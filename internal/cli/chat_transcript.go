@@ -92,18 +92,18 @@ func appendPanel(parts *[]string, rows *int, s string) {
 }
 
 // bottomRows is the terminal-row height of the pinned bottom region: any open
-// panels (todo / approval / chooser / rewind / completion), the input box (its
-// line count plus top+bottom border), and the two fixed status rows.
-//
-// NOTE: this set mirrors the panels View pins above the box, MINUS
-// renderResumePicker — which View also draws but bottomRows has never counted.
-// Kept as-is to preserve the existing layout; reconciling that omission would be
-// a separate, visually-verified behaviour change, not part of this dedup.
+// panels (todo / approval / chooser / rewind / resume-picker / completion), the
+// input box (its line count plus top+bottom border), and the two fixed status
+// rows. The panel set and order MUST match the appendPanel calls in View, so the
+// transcript viewport (sized as height - bottomRows) leaves room for exactly what
+// is drawn beneath it — when only View counted the resume picker the viewport ran
+// one panel too tall while "/resume" was open.
 func (m chatTUI) bottomRows() int {
 	rows := panelRowCount(m.renderTodoPanel()) +
 		panelRowCount(m.renderApprovalBanner()) +
 		panelRowCount(m.renderChooser()) +
 		panelRowCount(m.renderRewind()) +
+		panelRowCount(m.renderResumePicker()) +
 		panelRowCount(m.renderCompletion())
 	if m.state == tuiRunning {
 		rows++ // the working spinner line above the box
