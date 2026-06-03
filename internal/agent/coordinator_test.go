@@ -71,6 +71,47 @@ func TestCoordinatorHandsPlanToExecutor(t *testing.T) {
 	}
 }
 
+func TestCoordinatorBypassesPlannerForImageParts(t *testing.T) {
+	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
+		{Type: provider.ChunkText, Text: "List .roach-code/attachments, then run pytesseract OCR."},
+		{Type: provider.ChunkDone},
+	}}
+	exec := &mockProvider{name: "executor", chunks: []provider.Chunk{
+		{Type: provider.ChunkText, Text: "I can read the attached image directly."},
+		{Type: provider.ChunkDone},
+	}}
+
+	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
+	plannerSess := NewSession("planner-sys")
+	coord := NewCoordinator(planner, plannerSess, nil, executor, 0, event.Discard)
+
+	msg := provider.Message{
+		Role:    provider.RoleUser,
+		Content: "[image1] 이거 읽어봐요",
+		Parts: []provider.ContentPart{
+			{Type: "text", Text: "[image1] 이거 읽어봐요"},
+			{Type: "image", ImageURL: "data:image/png;base64,AAA"},
+		},
+	}
+	if err := coord.RunMessage(context.Background(), msg); err != nil {
+		t.Fatalf("RunMessage: %v", err)
+	}
+
+	if planner.lastReq.Messages != nil {
+		t.Fatalf("planner saw multimodal image turn: %+v", planner.lastReq.Messages)
+	}
+	got := lastUser(exec.lastReq)
+	if strings.Contains(got, "pytesseract") || strings.Contains(got, ".roach-code/attachments") {
+		t.Fatalf("executor handoff = %q, must not include planner OCR/list instructions", got)
+	}
+	if got != "[image1] 이거 읽어봐요" {
+		t.Fatalf("executor user content = %q, want original sanitized image prompt", got)
+	}
+	if parts := exec.lastReq.Messages[len(exec.lastReq.Messages)-1].Parts; len(parts) != 2 || parts[1].Type != "image" {
+		t.Fatalf("executor parts = %+v, want preserved native image", parts)
+	}
+}
+
 func TestEnsureCoordinatorTextPartPreservesImageOnlyParts(t *testing.T) {
 	msg := provider.Message{
 		Content: "handoff",
