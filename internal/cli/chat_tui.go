@@ -401,6 +401,10 @@ func newChatTUI(ctrl *control.Controller, missing string, eventCh chan event.Eve
 	ti.CharLimit = 16384
 	ti.SetHeight(1)
 	ti.ShowLineNumbers = false
+	// DynamicHeight: textarea auto-grows to fit visual (soft-wrapped) lines,
+	// capped by MaxHeight so long pastes don't crowd the chat scrollback.
+	ti.DynamicHeight = true
+	ti.MaxHeight = maxInputRows
 	applyTextareaTheme(&ti)
 	// Use the real terminal cursor (not a styled virtual one) so View can place
 	// it at the insertion point and IME candidate windows anchor to the input.
@@ -549,6 +553,8 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	inputDebugLog(msg) // no-op unless ROACH_INPUT_DEBUG is set
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -649,12 +655,24 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, autoScrollTick()
 
 	case tea.MouseReleaseMsg:
-		// Release finalizes the selection; the highlight stays on as the visual
-		// "what's selected" cue and a right-click copies it. A plain click (no
-		// drag) clears any prior selection.
+		// Release finalizes the selection. A drag that actually selected something
+		// auto-copies it to the clipboard (the Claude Code convention — "just drag
+		// to copy"), keeping the highlight on as the "what was copied" cue; a
+		// right-click still re-copies. A plain click (no drag) clears any prior
+		// selection.
 		m.autoScroll = 0 // stop edge auto-scroll
-		if msg.Button == tea.MouseLeft && m.sel.active && m.sel.empty() {
+		// An active selection can only have come from a left-press + drag, so the
+		// release ends that drag regardless of which button the terminal reports on
+		// the release event (some report MouseNone / a different button in SGR mode,
+		// which would otherwise drop the copy). A non-empty drag copies to the
+		// clipboard and then drops the highlight — the drag is finished, so the
+		// selection clears on release rather than lingering. A plain click clears too.
+		if m.sel.active {
+			text := m.selectedText()
 			m.sel = selection{}
+			if text != "" {
+				return m, tea.Batch(copyToClipboard(text), finalize(m, cmds))
+			}
 		}
 		return m, nil
 
@@ -666,6 +684,15 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.InsertString(ref + " ")
 			m.growInputToFit()
 			m.updateCompletion()
+			return m, finalize(m, cmds)
+		}
+		// An idle paste that carries no text is the tell-tale of an image (or other
+		// non-text payload) the terminal can't deliver through the PTY: some
+		// terminals (Warp) route Ctrl+V through bracketed paste rather than a key
+		// event, so the ctrl+v handler never fires. Probe the OS clipboard for an
+		// image directly so image paste works regardless of how Ctrl+V is routed.
+		if m.state != tuiRunning && strings.TrimSpace(msg.Content) == "" {
+			cmds = append(cmds, pasteClipboardImage())
 			return m, finalize(m, cmds)
 		}
 		if !m.chooserTyping() && m.pendingApproval == nil && m.rewind == nil && m.shouldFoldPaste(msg.Content) {
@@ -2331,7 +2358,18 @@ func (m *chatTUI) clearSubmittedPastes() {
 	m.pendingPastes = nil
 }
 
+// growInputToFit resizes the textarea to the number of visual lines its value
+// spans, capped at maxInputRows so a long paste doesn't crowd the screen.
+// When DynamicHeight is enabled the textarea already auto-sizes itself, but we
+// keep this as a safety net for places that may need an explicit nudge.
 func (m *chatTUI) growInputToFit() {
+	if m.input.DynamicHeight {
+		// The built-in recalculate already tracks visual lines; just ensure the
+		// cap is applied. Calling SetHeight here would fight DynamicHeight, so
+		// we let the textarea manage its own height.
+		return
+	}
+	// Fallback: count hard newlines only (pre-DynamicHeight behaviour).
 	lines := strings.Count(m.input.Value(), "\n") + 1
 	if lines < 1 {
 		lines = 1
@@ -2344,16 +2382,21 @@ func (m *chatTUI) growInputToFit() {
 	}
 }
 
+// saveClipboardImageFn reads an image off the OS clipboard and returns its saved
+// path; a var so tests can drive the paste→attach pipeline without a real
+// clipboard (and PowerShell/osascript subprocess).
+var saveClipboardImageFn = control.SaveClipboardImage
+
 func pasteClipboardImage() tea.Cmd {
 	return func() tea.Msg {
-		path, err := control.SaveClipboardImage()
+		path, err := saveClipboardImageFn()
 		return clipboardImageMsg{path: path, err: err}
 	}
 }
 
 func pasteClipboard() tea.Cmd {
 	return func() tea.Msg {
-		path, imageErr := control.SaveClipboardImage()
+		path, imageErr := saveClipboardImageFn()
 		if imageErr == nil {
 			return clipboardPasteMsg{path: path}
 		}

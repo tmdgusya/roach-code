@@ -70,6 +70,68 @@ func TestSelectedTextMultiLine(t *testing.T) {
 	}
 }
 
+// drainCmd executes a command and any commands it batches, so a test can drive
+// the clipboard side effects of a tea.Batch(copy, finalize) return.
+func drainCmd(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	if batch, ok := cmd().(tea.BatchMsg); ok {
+		for _, c := range batch {
+			drainCmd(c)
+		}
+	}
+}
+
+// TestDragReleaseAutoCopies locks in the "just drag to copy" convenience: a
+// release after a real drag-selection copies the selection to the clipboard AND
+// drops the highlight, while a plain click (empty selection) copies nothing and
+// clears too.
+func TestDragReleaseAutoCopies(t *testing.T) {
+	defer func(fn func(string) error) { clipboardWriteAll = fn }(clipboardWriteAll)
+	var got string
+	clipboardWriteAll = func(s string) error { got = s; return nil }
+
+	m := newTestChatTUI()
+	m.wrappedLines = []string{"hello world", "second line"}
+
+	// A real drag-selection (anchor != head) auto-copies on release and clears.
+	m.sel = selection{active: true, anchor: selPos{line: 0, col: 0}, head: selPos{line: 0, col: 5}}
+	rel, cmd := m.update(tea.MouseReleaseMsg{Button: tea.MouseLeft})
+	if cmd == nil {
+		t.Fatal("left-release with a non-empty selection must return a copy command")
+	}
+	drainCmd(cmd)
+	if got != "hello" {
+		t.Errorf("drag-release copied %q, want %q", got, "hello")
+	}
+	if rel.(chatTUI).sel.active {
+		t.Error("drag-release should drop the highlight once the drag ends")
+	}
+
+	// Robustness: a release that reports a different button (terminals vary in SGR
+	// mode) must still copy an active drag-selection — the selection itself, not the
+	// release button, is the signal.
+	got = ""
+	m.sel = selection{active: true, anchor: selPos{line: 1, col: 0}, head: selPos{line: 1, col: 6}}
+	_, cmd = m.update(tea.MouseReleaseMsg{Button: tea.MouseRight})
+	drainCmd(cmd)
+	if got != "second" {
+		t.Errorf("release with a non-left button should still copy the drag-selection, got %q", got)
+	}
+
+	// A plain click (anchor == head) copies nothing and clears the selection.
+	got = ""
+	m.sel = selection{active: true, anchor: selPos{line: 0, col: 2}, head: selPos{line: 0, col: 2}}
+	next, _ := m.update(tea.MouseReleaseMsg{Button: tea.MouseLeft})
+	if got != "" {
+		t.Errorf("plain click should copy nothing, got %q", got)
+	}
+	if next.(chatTUI).sel.active {
+		t.Error("plain click should clear the selection")
+	}
+}
+
 func TestCopyToClipboardPlatformSuccess(t *testing.T) {
 	defer func(fn func(string) error) { clipboardWriteAll = fn }(clipboardWriteAll)
 	var got string

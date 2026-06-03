@@ -10,6 +10,9 @@
 # Scratch / preview files (e.g. docs/_mascot_check.html)
 /docs/_*
 
+# Input diagnostics (ROACH_INPUT_DEBUG writes this in the cwd; never committed)
+/roach-input-debug.log
+
 # Go test/build scratch
 *.test
 *.out

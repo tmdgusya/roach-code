@@ -4,8 +4,66 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 )
+
+// TestEmptyPasteAttachesClipboardImage proves the Warp Ctrl+V routing fix end to
+// end: an idle empty bracketed paste (the tell-tale of an image the terminal
+// can't deliver through the PTY as text) probes the OS clipboard for an image
+// and, on success, drops an [image #N] token into the composer — no key event
+// required, so it works even when the terminal swallows Ctrl+V for its own paste.
+func TestEmptyPasteAttachesClipboardImage(t *testing.T) {
+	defer func(fn func() (string, error)) { saveClipboardImageFn = fn }(saveClipboardImageFn)
+	const fakePath = ".roach-code/attachments/clipboard-20260601-010203.000001.png"
+	saveClipboardImageFn = func() (string, error) { return fakePath, nil }
+
+	m := newTestChatTUI()
+	next, cmd := m.update(tea.PasteMsg{Content: ""})
+	if cmd == nil {
+		t.Fatal("an empty idle paste must return a clipboard-image probe command")
+	}
+	// Drive the probe to its message, then feed it back the way the runtime would.
+	var img tea.Msg
+	for _, msg := range runCmdMsgs(cmd) {
+		if _, ok := msg.(clipboardImageMsg); ok {
+			img = msg
+		}
+	}
+	if img == nil {
+		t.Fatal("empty paste did not route to a clipboard image probe")
+	}
+	final, _ := next.(chatTUI).update(img)
+	fm := final.(chatTUI)
+	if got := fm.input.Value(); !strings.Contains(got, "[image #1]") {
+		t.Fatalf("composer should hold the [image #1] token, got %q", got)
+	}
+	if len(fm.pastedBlocks) != 1 || fm.pastedBlocks[0].text != "@"+fakePath || !fm.pastedBlocks[0].image {
+		t.Fatalf("pasted block should map [image #1] -> @%s (image), got %+v", fakePath, fm.pastedBlocks)
+	}
+}
+
+// runCmdMsgs executes a command and any commands it batches, returning every
+// non-batch message produced (so a test can follow a finalize(probe) return).
+func runCmdMsgs(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	var out []tea.Msg
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			out = append(out, runCmdMsgs(c)...)
+		}
+		return out
+	}
+	if msg != nil {
+		out = append(out, msg)
+	}
+	return out
+}
 
 func TestExpandPastedBlocksImage(t *testing.T) {
 	m := &chatTUI{pastedBlocks: []pastedBlock{
