@@ -204,6 +204,8 @@ type Agent struct {
 	// (a different failure shape, or any success). See applyStormBreaker.
 	stormSig   string
 	stormCount int
+
+	suppressToolsThisTurn bool
 }
 
 // SetGate installs the per-call permission gate. Used by `roach-code chat` to swap the
@@ -379,6 +381,8 @@ func (a *Agent) RunMessage(ctx context.Context, msg provider.Message) error {
 	if a.evidence != nil {
 		a.evidence.Reset()
 	}
+	a.suppressToolsThisTurn = messageHasImagePart(msg)
+	defer func() { a.suppressToolsThisTurn = false }()
 	a.sink.Emit(event.Event{Kind: event.TurnStarted})
 	a.session.Add(msg)
 
@@ -437,9 +441,13 @@ func (a *Agent) RunMessage(ctx context.Context, msg provider.Message) error {
 // accumulated text and reasoning are also returned so the caller can round-trip
 // reasoning on the next turn.
 func (a *Agent) stream(ctx context.Context, turn int) (string, string, string, []provider.ToolCall, *provider.Usage, error) {
+	tools := a.tools.Schemas()
+	if a.suppressToolsThisTurn {
+		tools = nil
+	}
 	ch, err := a.prov.Stream(ctx, provider.Request{
 		Messages:    a.session.Messages,
-		Tools:       a.tools.Schemas(),
+		Tools:       tools,
 		Temperature: a.temperature,
 	})
 	if err != nil {

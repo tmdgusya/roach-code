@@ -52,6 +52,10 @@ node_modules/
 # CodeGraph per-project index (rebuilt locally; never committed)
 .codegraph/
 
+# Local agent/loop scratch state and runtime pid files
+.omo/
+server.pid
+
 # Editor / OS
 .DS_Store
 Thumbs.db
