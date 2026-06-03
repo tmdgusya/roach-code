@@ -17,6 +17,9 @@ func TestCommandsIncludesEffortNotThinking(t *testing.T) {
 	if !hasCommand(cmds, "effort") {
 		t.Fatalf("Commands() should include effort: %+v", cmds)
 	}
+	if !hasCommand(cmds, "goal") {
+		t.Fatalf("Commands() should include goal: %+v", cmds)
+	}
 	if hasCommand(cmds, "thinking") {
 		t.Fatalf("Commands() should not include thinking: %+v", cmds)
 	}
