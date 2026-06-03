@@ -64,7 +64,7 @@ func (*AskTool) Schema() json.RawMessage {
 }
 
 // ReadOnly is true: asking has no host side effects, so it never needs approval
-// and stays available in plan mode (clarifying scope while planning is fine).
+// and is read-only (clarifying scope is fine before making changes).
 func (*AskTool) ReadOnly() bool { return true }
 
 func (*AskTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {

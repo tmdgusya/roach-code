@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -33,8 +35,41 @@ func TestExtractRejectsEscapingSymlink(t *testing.T) {
 	}
 }
 
-// TestExtractAllowsInternalSymlink keeps legitimate in-bundle symlinks working.
+func testCanCreateSymlink(t *testing.T) bool {
+	t.Helper()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write symlink target: %v", err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(target, link); err != nil {
+		return false
+	}
+	return true
+}
+
+// TestSafeSymlinkAllowsInternalDestinations proves the archive validation accepts
+// in-bundle links even on hosts that cannot create symlinks.
+func TestSafeSymlinkAllowsInternalDestinations(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, "link")
+	for _, dest := range []string{"bin/codegraph", "./node", "sub/dir/../tool"} {
+		if err := safeSymlink(dir, link, dest); err != nil {
+			t.Errorf("internal symlink -> %q should be allowed, got %v", dest, err)
+		}
+	}
+}
+
+// TestExtractAllowsInternalSymlink keeps legitimate in-bundle symlinks working
+// when the host permits creating them. Some Windows setups require Developer Mode
+// or SeCreateSymbolicLinkPrivilege, so validation coverage lives in
+// TestSafeSymlinkAllowsInternalDestinations and this integration path is skipped
+// when os.Symlink itself is unavailable.
 func TestExtractAllowsInternalSymlink(t *testing.T) {
+	if !testCanCreateSymlink(t) {
+		t.Skip("host does not allow creating symlinks")
+	}
 	dir := t.TempDir()
 	for _, dest := range []string{"bin/codegraph", "./node", "sub/dir/../tool"} {
 		if err := extractTarGz(tarGzWithSymlink("link", dest), dir); err != nil {

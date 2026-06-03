@@ -246,12 +246,6 @@ type AgentConfig struct {
 	// startup (a built-in like "explanatory"/"learning"/"concise", or a custom
 	// .roach-code/output-styles/<name>.md). Empty = the unmodified prompt.
 	OutputStyle string `toml:"output_style"`
-	// AutoPlan controls whether interactive turns that look multi-step start in
-	// plan mode automatically: "off" disables it, "ask"/"on" enable the gate.
-	AutoPlan string `toml:"auto_plan"`
-	// AutoPlanClassifier optionally names a provider/model used to classify
-	// borderline auto-plan decisions. Empty keeps the zero-cost heuristic path.
-	AutoPlanClassifier string `toml:"auto_plan_classifier"`
 }
 
 // ProviderEntry declares a model provider instance. ContextWindow is the model's
@@ -414,10 +408,7 @@ the scope, or a consequential or ambiguous decision — call the ask tool to off
 it when there's an obvious default; don't ask just to confirm.
 For multi-step work, track progress with the todo_write tool: lay out the steps,
 keep exactly one in_progress, and flip each to completed as you finish it — update
-the list as you go, not just at the end.
-In plan mode the harness blocks writer tools: do read-only research, then write a
-concise plan as your reply and stop. The user is asked to approve before anything
-is changed; once approved, work through the steps, updating the task list as you go.`
+the list as you go, not just at the end.`
 
 // LanguagePolicy is the auto fallback appended to the system prompt when no
 // concrete UI language is resolved. It is static English text, so it stays part
@@ -439,7 +430,6 @@ func Default() *Config {
 			// compaction, not by a round count. Set a positive agent.max_steps only
 			// if you want a hard guard against runaway.
 			MaxSteps: 0,
-			AutoPlan: "ask",
 		},
 		// Mode "ask" with no rules keeps `roach-code run` autonomous (no TTY → ask
 		// resolves to allow) while `roach-code chat` prompts before writers. Users add

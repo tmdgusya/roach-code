@@ -56,6 +56,7 @@ func writeHelpItems(b *strings.Builder, width int, title string, items []compIte
 func builtinHelpItems() []compItem {
 	return []compItem{
 		{label: "/compact", hint: i18n.M.CmdCompact},
+		{label: "/goal", hint: i18n.M.CmdGoal},
 		{label: "/new", hint: i18n.M.CmdNew},
 		{label: "/rewind", hint: i18n.M.CmdRewind},
 		{label: "/tree", hint: i18n.M.CmdTree},

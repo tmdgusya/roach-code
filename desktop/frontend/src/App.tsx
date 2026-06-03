@@ -135,7 +135,6 @@ export default function App() {
     cancel,
     approve,
     answerQuestion,
-    setPlan,
     setBypass,
     newSession,
     listSessions,
@@ -170,7 +169,6 @@ export default function App() {
   const [workspacePreviewModeActive, setWorkspacePreviewModeActive] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [capsOpen, setCapsOpen] = useState(false);
-  const [pendingPlanRevision, setPendingPlanRevision] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window === "undefined" ? 1440 : window.innerWidth));
   const [footerHeight, setFooterHeight] = useState(0);
   const footerRef = useRef<HTMLElement>(null);
@@ -185,31 +183,27 @@ export default function App() {
   );
 
   // applyMode is the single source of truth for the input mode: it updates the
-  // local pill and pushes the matching gate state to the controller (plan = read
-  // only; yolo = auto-approve every tool call). normal clears both.
+  // local pill and pushes the matching gate state to the controller.
   const applyMode = useCallback(
     (m: Mode) => {
       setMode(m);
-      setPlan(m === "plan");
       setBypass(m === "yolo");
     },
-    [setPlan, setBypass],
+    [setBypass],
   );
-  // Shift+Tab cycles normal → plan → yolo → normal.
+  // Shift+Tab toggles normal ↔ yolo.
   const cycleMode = useCallback(() => {
-    applyMode(mode === "normal" ? "plan" : mode === "plan" ? "yolo" : "normal");
+    applyMode(mode === "normal" ? "yolo" : "normal");
   }, [mode, applyMode]);
 
   // Switching models rebuilds the controller, which starts in normal mode — so
-  // re-apply the current mode, or the pill would say plan/YOLO while the fresh
-  // controller silently uses normal gating.
+  // re-apply YOLO when needed.
   const switchModel = useCallback(
     async (name: string) => {
       await setModel(name);
-      if (mode === "plan") setPlan(true);
-      else if (mode === "yolo") setBypass(true);
+      if (mode === "yolo") setBypass(true);
     },
-    [setModel, mode, setPlan, setBypass],
+    [setModel, mode, setBypass],
   );
 
   // The live task list pinned above the composer comes from the most recent
@@ -231,13 +225,6 @@ export default function App() {
     todoItem.id !== dismissedTodo &&
     todos.length > 0 &&
     todos.some((t) => t.status !== "completed");
-
-  useEffect(() => {
-    if (!pendingPlanRevision || state.running) return;
-    const text = pendingPlanRevision;
-    setPendingPlanRevision(null);
-    send(text);
-  }, [pendingPlanRevision, send, state.running]);
 
   // Memory drawer: opening fetches a fresh snapshot; writes re-fetch so the
   // panel reflects what landed on disk.
@@ -754,21 +741,7 @@ export default function App() {
             {state.approval && (
               <ApprovalModal
                 approval={state.approval}
-                onAnswer={(allow, session) => {
-                  // Approving an exit_plan_mode plan leaves plan mode (the controller
-                  // flips the executor; mirror it here for the indicator).
-                  if (state.approval!.tool === "exit_plan_mode" && allow) setMode("normal");
-                  approve(state.approval!.id, allow, session);
-                }}
-                onRevisePlan={(text) => {
-                  setPendingPlanRevision(text);
-                  approve(state.approval!.id, false, false);
-                }}
-                onExitPlan={() => {
-                  setMode("normal");
-                  setPlan(false);
-                  approve(state.approval!.id, false, false);
-                }}
+                onAnswer={(allow, session) => approve(state.approval!.id, allow, session)}
               />
             )}
             <Composer
@@ -789,7 +762,6 @@ export default function App() {
 	      effort={state.effort}
 	      jobs={state.jobs}
               running={state.running}
-              mode={mode}
               turnStartAt={state.turnStartAt}
 	      turnTokens={state.turnTokens}
 	      onSwitchModel={switchModel}

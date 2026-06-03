@@ -27,6 +27,9 @@ import (
 //go:embed index.html
 var indexHTML []byte
 
+//go:embed mascot.png
+var mascotPNG []byte
+
 // Server wires a controller to its HTTP surface. The Broadcaster must be the
 // same sink the controller was constructed with, so events reach SSE clients.
 type Server struct {
@@ -86,13 +89,13 @@ func (s *Server) HandlerWithCORS(origin string) http.Handler {
 func (s *Server) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.index)
+	mux.HandleFunc("GET /mascot.png", s.mascot)
 	mux.HandleFunc("GET /events", s.events)
 	mux.HandleFunc("GET /history", s.history)
 	mux.HandleFunc("GET /context", s.context)
 	mux.HandleFunc("POST /submit", s.submit)
 	mux.HandleFunc("POST /cancel", s.cancel)
 	mux.HandleFunc("POST /approve", s.approve)
-	mux.HandleFunc("POST /plan", s.plan)
 	mux.HandleFunc("POST /compact", s.compact)
 	mux.HandleFunc("POST /new", s.newSession)
 	mux.HandleFunc("POST /rewind", s.rewind)
@@ -174,6 +177,12 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(indexHTML)
 }
 
+func (s *Server) mascot(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write(mascotPNG)
+}
+
 // events streams the controller's event flow as SSE until the client
 // disconnects. Each event is one `data:` frame of the JSON wire form.
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
@@ -239,18 +248,6 @@ func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) plan(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		On bool `json:"on"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
-		return
-	}
-	s.ctrl.SetPlanMode(body.On)
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func (s *Server) compact(w http.ResponseWriter, r *http.Request) {
 	if err := s.ctrl.Compact(r.Context(), ""); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -276,6 +273,13 @@ func (s *Server) history(w http.ResponseWriter, _ *http.Request) {
 	}
 	var out []msg
 	for _, m := range s.ctrl.History() {
+		// Only the human-readable conversation repopulates the transcript. The
+		// system message (base prompt + skills + tool specs) and raw tool results
+		// are never rendered — otherwise a fresh session dumps the whole system
+		// prompt into the UI.
+		if m.Role == provider.RoleSystem || m.Role == provider.RoleTool {
+			continue
+		}
 		out = append(out, msg{Role: string(m.Role), Content: m.Content})
 	}
 	writeJSON(w, out)
@@ -508,7 +512,6 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	sess := map[string]any{
 		"label":     s.ctrl.Label(),
 		"running":   s.ctrl.Running(),
-		"plan":      s.ctrl.PlanMode(),
 		"bypass":    s.ctrl.Bypass(),
 		"cwd":       s.ctrl.SessionDir(),
 		"used":      used,

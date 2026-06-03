@@ -228,10 +228,7 @@ func (p Policy) Decide(toolName string, readOnly bool, args json.RawMessage) Dec
   (`roach-code run`, a sub-agent, anything with no TTY / no approver) cannot prompt, so
   it resolves `Ask` to **allow** — preserving autonomous behaviour. A `Deny` is a
   hard block in *every* mode: the tool never executes and the model receives a
-  "blocked" result it can adapt to (the same shape as a plan-mode refusal).
-- **Relationship to plan mode.** Plan mode (§3.4) is an orthogonal, coarser gate
-  that refuses *all* writers regardless of policy; it is checked first. The
-  permission layer is the fine-grained, always-on gate underneath it.
+  "blocked" result it can adapt to.
 
 Out of the box (`mode = "ask"`, no rules) `roach-code run` behaves exactly as before
 (writers resolve `Ask`→allow with no TTY), while `roach-code chat` now prompts before

@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="Roach Code" width="640"/>
+  <img src="docs/mascot.png" alt="Roach Code mascot" width="200"/>
+</p>
+<p align="center">
+  <img src="docs/logo.svg" alt="Roach Code" width="440"/>
 </p>
 
 <p align="center">
@@ -104,8 +107,6 @@ default_model = "deepseek-flash"   # 실행자; 플래너를 추가하려면 [ag
 # planner_model = "mimo-pro"          # 선택: 저빈도 플래너
 # subagent_model = "deepseek-pro"     # 선택: runAs=subagent 스킬의 기본 모델
 # subagent_models = { review = "deepseek-pro", security_review = "deepseek-pro" }
-auto_plan = "ask"                  # off|ask|on; 복잡한 chat 작업은 plan 모드로 시작
-# auto_plan_classifier = "deepseek-flash"   # 선택; 애매한 작업에서만 호출
 
 [[providers]]
 name        = "deepseek-flash"
@@ -235,11 +236,6 @@ Subagent 스킬은 기본적으로 실행자 모델을 상속합니다. 다른 �
 `subagent_model`을 설정하거나, `review`/`security_review` 같은 특정 스킬만 덮어쓰려면
 `subagent_models`를 사용하세요.
 
-인터랙티브 프론트엔드에서는 `agent.auto_plan = "ask"`가 복잡해 보이는 작업을 자동으로
-plan 모드로 진입시킵니다: Roach Code가 먼저 읽기 전용 계획을 작성한 뒤, 편집이나
-부작용이 있는 명령을 실행하기 전에 승인을 기다립니다. `auto_plan_classifier`에
-`deepseek-flash` 같은 저렴한 provider를 지정할 수 있으며, 애매한 입력에서만 호출되고
-분류에 실패하면 휴리스틱으로 폴백합니다.
 
 ## 아키텍처
 

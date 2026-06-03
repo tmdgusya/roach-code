@@ -74,7 +74,7 @@ func CallContext(ctx context.Context) (parentID string, sink event.Sink, asker A
 }
 
 // Gate decides, per tool call, whether it may run. The agent consults it at
-// execute time (after the plan-mode gate). It is interface-shaped so the agent
+// execute time. It is interface-shaped so the agent
 // stays independent of the permission package and of how "ask" is resolved
 // (silently in headless runs, interactively in the chat TUI). A nil gate means
 // no gating — every call runs, preserving behaviour for callers that don't wire
@@ -147,15 +147,7 @@ type Agent struct {
 	sessUncachedIn atomic.Int64
 	sessCompletion atomic.Int64
 
-	// planMode, when true, refuses any tool call whose ReadOnly() is false.
-	// The system prompt and tool list never change with the toggle so the
-	// prompt-cache prefix stays valid; the gating happens at execute time
-	// and the model sees a "blocked" result it can adapt to. Toggled from
-	// the outside via SetPlanMode.
-	planMode atomic.Bool
-
-	// gate, when non-nil, is the per-call permission gate consulted after the
-	// plan-mode check. nil disables gating entirely.
+	// gate, when non-nil, is the per-call permission gate. nil disables gating.
 	gate Gate
 
 	// hooks, when non-nil, fires PreToolUse / PostToolUse shell hooks around each
@@ -213,12 +205,6 @@ type Agent struct {
 	stormSig   string
 	stormCount int
 }
-
-// SetPlanMode flips the read-only gate. While true, executeOne refuses any
-// non-ReadOnly tool the model calls and returns a "blocked" result instead of
-// running it. The cache-friendly bits — system prompt, tools schema, message
-// history — are left untouched, so the toggle costs nothing in cache hits.
-func (a *Agent) SetPlanMode(v bool) { a.planMode.Store(v) }
 
 // SetGate installs the per-call permission gate. Used by `roach-code chat` to swap the
 // headless gate built in setup for an interactive one that prompts the user;
@@ -654,7 +640,7 @@ const stormBreakThreshold = 3
 // change approach. It keys on each call's (tool, error) — not its args — because a
 // stuck model reworks the arguments cosmetically while failing identically (see
 // the stormSig field doc). A turn is a fixation candidate only when every one of
-// its calls errored and none was merely blocked by plan mode / permissions (those
+// its calls errored and none was merely blocked by permissions (those
 // carry a clear, distinct message the model can already act on). Any success, any
 // block, or a different batch shape is varied work, so it resets the counter. This
 // covers both the single-call spiral and a repeated multi-call batch. The hard
@@ -715,7 +701,7 @@ func batchStormSignature(calls []provider.ToolCall, outcomes []toolOutcome) (str
 // the display-facing notice bits. errMsg is the short failure reason (empty on
 // success) — a refused call, an unknown tool, or an execution error — so a sink
 // renders the result as failed ("⊘ name <errMsg>" / a red card) instead of OK;
-// blocked narrows that to a refusal (plan mode / permission). truncMsg is set
+// blocked narrows that to a refusal (permission). truncMsg is set
 // (without the "· " prefix) when the output was head+tailed.
 type toolOutcome struct {
 	output    string
@@ -734,13 +720,6 @@ func (a *Agent) executeOne(ctx context.Context, call provider.ToolCall) toolOutc
 		return toolOutcome{
 			output: fmt.Sprintf("error: unknown tool %q", call.Name),
 			errMsg: fmt.Sprintf("unknown tool %q", call.Name),
-		}
-	}
-	if a.planMode.Load() && !t.ReadOnly() {
-		return toolOutcome{
-			output:  fmt.Sprintf("blocked: %q is a writer tool and plan mode is read-only. Keep exploring with read-only tools, then write your plan as your reply — the user will be asked to approve it before any changes are made.", call.Name),
-			blocked: true,
-			errMsg:  "blocked: plan mode is read-only",
 		}
 	}
 	if a.gate != nil {

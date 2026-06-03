@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="Roach Code" width="640"/>
+  <img src="docs/mascot.png" alt="Roach Code mascot" width="200"/>
+</p>
+<p align="center">
+  <img src="docs/logo.svg" alt="Roach Code" width="440"/>
 </p>
 
 <p align="center">
@@ -106,8 +109,6 @@ default_model = "deepseek-flash"   # executor; set [agent].planner_model to add 
 # planner_model = "mimo-pro"          # optional low-frequency planner
 # subagent_model = "deepseek-pro"     # optional default for runAs=subagent skills
 # subagent_models = { review = "deepseek-pro", security_review = "deepseek-pro" }
-auto_plan = "ask"                  # off|ask|on; complex chat tasks start in plan mode
-# auto_plan_classifier = "deepseek-flash"   # optional; only borderline tasks call it
 
 [[providers]]
 name        = "deepseek-flash"
@@ -240,11 +241,6 @@ Subagent skills inherit the executor model by default. Set `subagent_model` to
 run them on another configured model, or use `subagent_models` to override only
 specific skills such as `review` or `security_review`.
 
-For interactive frontends, `agent.auto_plan = "ask"` makes complex-looking tasks
-enter plan mode automatically: Roach Code first drafts a read-only plan, then waits
-for approval before editing or running side-effecting commands. `auto_plan_classifier`
-can name a cheap provider such as `deepseek-flash`; it is only called for
-borderline inputs and falls back to the heuristic if classification fails.
 
 ## Architecture
 
@@ -266,8 +262,8 @@ calls (bounded retry on 429/5xx), built-in tools (read_file, write_file,
 edit_file, multi_edit, bash, ls, glob, grep, web_fetch, task, todo_write, ask),
 TOML config, an interactive `roach-code setup` wizard, two-model collaboration
 (executor + planner in separate, cache-stable sessions), low-frequency context
-compaction, sub-agents (`task`), a bubbletea chat TUI (markdown, plan mode with
-controller-driven approval, live token/activity readout, pinned task list,
+compaction, sub-agents (`task`), a bubbletea chat TUI (markdown,
+live token/activity readout, pinned task list,
 `ask` question chooser, `/compact` `/new` `/tree` `/branch` `/switch` `/todo`),
 session persistence + resume, per-call **permissions** (allow/ask/deny rules;
 chat prompts before writers, deny rules hard-block everywhere), a **workspace

@@ -128,17 +128,10 @@ export const en = {
 
   // composer
   "composer.placeholder": "Message Roach Code…  ( / commands · @ files )",
-  "composer.planMode": "plan mode",
-  "composer.planModeOn": "plan mode on",
-  "composer.planHint": "shift+tab",
-  "composer.planHintExit": "shift+tab to exit",
   "composer.modeNormal": "normal",
-  "composer.modePlan": "plan mode",
   "composer.modeYolo": "YOLO",
   "composer.modeHint": "shift+tab",
-  "composer.modeTitle": "Cycle mode (shift+tab): normal → plan → YOLO (auto-approve everything)",
-  "composer.enterPlanTitle": "Enter plan mode (shift+tab) — read-only; propose a plan before writing",
-  "composer.exitPlanTitle": "Exit plan mode (shift+tab)",
+  "composer.modeTitle": "Toggle YOLO mode (shift+tab)",
   "composer.searchProjects": "Search projects",
   "composer.noProjectMatches": "No matching projects",
   "composer.addProject": "Add new project",
@@ -154,7 +147,6 @@ export const en = {
   // status bar
   "status.connecting": "connecting…",
   "status.ctx": "{pct}% ctx",
-  "status.plan": "PLAN",
   "status.switchModel": "Switch model",
   "status.noModels": "no models configured",
   "status.effort": "effort {level}",
@@ -171,13 +163,6 @@ export const en = {
   "status.yoloTitle": "YOLO — approvals are being skipped this session",
 
   // approval modal
-  "approval.planReady": "Plan ready",
-  "approval.planReadyHint": "Review the plan above",
-  "approval.startExecution": "Start execution",
-  "approval.revisePlan": "Revise plan",
-  "approval.revisePlanPlaceholder": "Tell me what should be updated in the plan...",
-  "approval.sendRevision": "Send update",
-  "approval.exitPlan": "Exit plan",
   "approval.toolPending": "Allow tool call",
   "approval.details": "Details",
   "approval.hideDetails": "Hide",

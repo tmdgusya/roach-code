@@ -58,6 +58,7 @@ const (
 func (m *chatTUI) slashItems() []compItem {
 	items := []compItem{
 		{label: "/compact", insert: "/compact ", hint: i18n.M.CmdCompact},
+		{label: "/goal", insert: "/goal ", hint: i18n.M.CmdGoal},
 		{label: "/new", insert: "/new ", hint: i18n.M.CmdNew},
 		{label: "/resume", insert: "/resume ", hint: i18n.M.CmdResume},
 		{label: "/rewind", insert: "/rewind", hint: i18n.M.CmdRewind},

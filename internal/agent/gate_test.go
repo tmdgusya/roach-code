@@ -26,7 +26,7 @@ func (g *stubGate) Check(ctx context.Context, toolName string, args json.RawMess
 }
 
 // TestGateBlocksDeniedCall proves executeOne consults the gate after the
-// plan-mode check: a denied tool returns a "blocked:" result plus a notice and
+// permission gate check: a denied tool returns a "blocked:" result plus a notice and
 // never runs, while an allowed tool runs normally.
 func TestGateBlocksDeniedCall(t *testing.T) {
 	reg := tool.NewRegistry()

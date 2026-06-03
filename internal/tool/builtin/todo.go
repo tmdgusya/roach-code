@@ -55,8 +55,8 @@ func (todoWrite) Schema() json.RawMessage {
 }
 
 // ReadOnly is true: todo_write only records a list (no filesystem or process
-// effect), so it never needs approval and stays available in plan mode — where
-// laying out a plan as todos is exactly the point.
+// effect), so it never needs approval and stays available while laying out work
+// as todos.
 func (todoWrite) ReadOnly() bool { return true }
 
 func (todoWrite) Execute(ctx context.Context, args json.RawMessage) (string, error) {

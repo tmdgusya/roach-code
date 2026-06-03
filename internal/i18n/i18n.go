@@ -64,20 +64,27 @@ type Messages struct {
 	ResumePickHint      string // keyboard hint in the interactive resume picker
 
 	// chat TUI status line / approval banner.
-	ChatThinking           string // live reasoning marker label, e.g. "thinking…"
-	ChatThoughtForFmt      string // collapsed reasoning summary, "%d" = elapsed s
-	ChatStatusThinkingFmt  string // "%s thinking… (%ds · <cancel hint>)" — %s = spinner, %d = elapsed s
-	ChatToolWorkingFmt     string // "%s working · %ds" under a running tool — %s = spinner, %d = elapsed s
-	ChatStatusIdle         string // shortcuts hint when idle
-	ChatStatusYoloIdle     string // shortcuts hint when idle in YOLO/bypass mode
-	ChatStatusPlanApproval string // shortcuts hint while a plan is pending
-	PlanApprovalPrompt     string // one-line "plan above is ready" banner shown above the input
-	ChatStatusToolApproval string // shortcuts hint while a tool call awaits approval
-	ToolApprovalPromptFmt  string // approval banner — tool, subject suffix, and source/intent detail
-	ToolApprovalSourceFmt  string // "Source: %s" / "来源: %s"
-	ToolApprovalBuiltIn    string // built-in tool source label
-	ToolApprovalImageUse   string // image-understanding detail for understand_image-style tools
-	DiffFoldedFmt          string // "… +%d more lines" footer when a writer diff is folded
+	ChatThinking             string // live reasoning marker label, e.g. "thinking…"
+	ChatThoughtForFmt        string // collapsed reasoning summary, "%d" = elapsed s
+	ChatStatusThinkingFmt    string // dim meta tail after the shimmering verb, "(%ds · <interrupt hint>)" — %d = elapsed s
+	ChatToolWorkingFmt       string // "%s working · %ds" under a running tool — %s = spinner, %d = elapsed s
+	ChatStatusIdle           string // shortcuts hint when idle
+	ChatStatusYoloIdle       string // shortcuts hint when idle in YOLO/bypass mode
+	ChatStatusToolApproval   string // shortcuts hint while a tool call awaits approval
+	ToolApprovalActionFmt    string // gate action line, "Will call tool %s" (%s = tool name)
+	ToolApprovalAllowOnce    string // gate choice row label — allow this one call
+	ToolApprovalAllowSession string // gate choice row label — allow similar calls this session
+	ToolApprovalDeny         string // gate choice row label — deny
+	ToolApprovalSourceFmt    string // "Source: %s" / "来源: %s"
+	ToolApprovalBuiltIn      string // built-in tool source label
+	ToolApprovalImageUse     string // image-understanding detail for understand_image-style tools
+	DiffFoldedFmt            string // "… +%d more lines" footer when a writer diff is folded
+
+	// /goal — session-scoped "keep working until this holds" loop.
+	GoalPursuing string // live-line verb while a goal loop runs, e.g. "pursuing goal"
+	GoalSetFmt   string // "/goal <cond>" armed confirmation, one %s = the condition
+	GoalCleared  string // "/goal clear" succeeded
+	GoalNone     string // "/goal" / "/goal clear" when no goal is active
 
 	// `ask` tool question card.
 	AskTypeSomething   string // the "type your own answer" option label
@@ -124,6 +131,7 @@ type Messages struct {
 	// share these via i18n.M, so both frontends localize identically).
 	CmdNew          string // /new
 	CmdCompact      string // /compact
+	CmdGoal         string // /goal
 	CmdRewind       string // /rewind
 	CmdTree         string // /tree
 	CmdBranch       string // /branch

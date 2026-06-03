@@ -141,9 +141,9 @@ export interface Meta {
   bypass?: boolean; // YOLO mode on (auto-approve every tool call)
 }
 
-// Mode is the input mode cycled by Shift+Tab: normal → plan (read-only) → yolo
+// Mode is the input mode toggled by Shift+Tab: normal ↔ yolo
 // (auto-approve every tool call; deny rules still apply).
-export type Mode = "normal" | "plan" | "yolo";
+export type Mode = "normal" | "yolo";
 
 export interface CommandInfo {
   name: string; // without the leading slash

@@ -369,8 +369,9 @@ func chatREPL(args []string) int {
 
 	m := newChatTUI(ctrl, missing, eventCh, termW)
 	if cfg, err := config.Load(); err == nil {
-		m.outputStyle = cfg.Agent.OutputStyle    // shown as the active entry in /output-style
-		m.statuslineCmd = cfg.Statusline.Command // custom status-line command, "" = built-in row
+		m.outputStyle = cfg.Agent.OutputStyle      // shown as the active entry in /output-style
+		m.statuslineCmd = cfg.Statusline.Command   // custom status-line command, "" = built-in row
+		m.bashSandbox = bashSandboxFromConfig(cfg) // bash confinement summary shown on a bash gate
 	}
 
 	// /model support: a pure builder the TUI calls to rebuild on a different

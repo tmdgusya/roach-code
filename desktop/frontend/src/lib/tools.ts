@@ -46,8 +46,7 @@ export function subjectOf(name: string, args: string): string {
     case "remember":
       return str(a, "name") || str(a, "description");
     case "todo_write":
-    case "exit_plan_mode":
-      return ""; // these get dedicated cards, not a subject line
+      return ""; // dedicated card, not a subject line
     default:
       return str(a, "path") || str(a, "file_path");
   }

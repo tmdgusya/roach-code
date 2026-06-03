@@ -7,6 +7,9 @@
 /roach
 /roach.exe
 
+# Scratch / preview files (e.g. docs/_mascot_check.html)
+/docs/_*
+
 # Go test/build scratch
 *.test
 *.out

@@ -43,7 +43,6 @@ export interface AppBindings {
   Cancel(): Promise<void>;
   Approve(id: string, allow: boolean, session: boolean): Promise<void>;
   AnswerQuestion(id: string, answers: QuestionAnswer[]): Promise<void>;
-  SetPlanMode(on: boolean): Promise<void>;
   Compact(): Promise<void>;
   NewSession(): Promise<void>;
   History(): Promise<HistoryMessage[]>;
@@ -370,7 +369,6 @@ function makeMockApp(): AppBindings {
     },
     async Approve() {},
     async AnswerQuestion() {},
-    async SetPlanMode() {},
     async Compact() {},
     async NewSession() {},
     async Checkpoints() {

@@ -3,7 +3,7 @@ import { Cpu, Wallet } from "lucide-react";
 import { EffortSwitcher } from "./EffortSwitcher";
 import { ModelSwitcher } from "./ModelSwitcher";
 import { SPINNER_WORDS, useI18n } from "../lib/i18n";
-import type { BalanceInfo, ContextInfo, EffortInfo, JobView, Meta, Mode, WireUsage } from "../lib/types";
+import type { BalanceInfo, ContextInfo, EffortInfo, JobView, Meta, WireUsage } from "../lib/types";
 
 // JobsChip is the status-bar background-jobs indicator: a count that opens an
 // upward popover listing the running jobs (id · label · status), mirroring the
@@ -88,7 +88,6 @@ export function StatusBar({
   effort,
   jobs,
   running,
-  mode,
   turnStartAt,
   turnTokens,
   onSwitchModel,
@@ -101,7 +100,6 @@ export function StatusBar({
   effort?: EffortInfo;
   jobs?: JobView[];
   running: boolean;
-  mode: Mode;
   turnStartAt: number;
   turnTokens: number;
   onSwitchModel: (name: string) => void;
@@ -175,7 +173,6 @@ export function StatusBar({
         </>
       )}
       <span className="statusbar__spacer" />
-      {mode === "plan" && <span className="statusbar__plan">{t("status.plan")}</span>}
     </div>
   );
 }

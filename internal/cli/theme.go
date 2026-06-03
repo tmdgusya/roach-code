@@ -35,6 +35,11 @@ type cliPalette struct {
 	diffDelBG    cliColor
 	toolRead     cliColor
 	toolProc     cliColor
+	surface      cliColor // warm panel fill behind tool/output blocks (ambient depth)
+	surfaceLift  cliColor // the panel's top row — one step toward the light (top-left lamp)
+	surfaceSeam  cliColor // 1-cell lit edge at col 3, where the lamp catches the structural spine
+	text         cliColor // base body-text foreground (warm off-white, not terminal default)
+	ink          cliColor // page background painted across the whole alt-screen (the ambient canvas)
 }
 
 type cliThemeStyle struct {
@@ -45,23 +50,33 @@ type cliThemeStyle struct {
 }
 
 var (
+	// The default dark shell is "warm coal": a near-black backdrop tinted brown
+	// rather than neutral graphite, low-contrast warm off-white text, a copper-coral
+	// glow accent, and seafoam/kelp as the cool counterpoint — an ambient, lamplit
+	// register (inspired by gajae-code's red-claw) instead of a high-contrast neon
+	// terminal. The glitch style still overrides these for the loud cyber look.
 	cliDarkTheme = cliPalette{
 		name:         "dark",
 		style:        "graphite",
-		accent:       cliColor{"#d97757", 173},
-		muted:        cliColor{"#c0c4cc", 251},
-		faint:        cliColor{"#858b96", 245},
-		success:      cliColor{"#74b87a", 108},
-		warn:         cliColor{"#d9a441", 179},
-		err:          cliColor{"#e0696a", 167},
-		danger:       cliColor{"#e5484d", 167},
-		border:       cliColor{"#343945", 237},
-		selection:    cliColor{"#d97757", 173},
-		userBubbleBG: cliColor{"#222631", 235},
-		diffAddBG:    cliColor{"#14351d", 22},
-		diffDelBG:    cliColor{"#3a1619", 52},
-		toolRead:     cliColor{"#56b6c2", 80},
-		toolProc:     cliColor{"#c678dd", 176},
+		accent:       cliColor{"#e0875c", 173}, // copper-coral glow
+		muted:        cliColor{"#c6ad9d", 250}, // warm dusty taupe (primary text-ish)
+		faint:        cliColor{"#8c7669", 243}, // muted coffee taupe
+		success:      cliColor{"#7fd6a8", 114}, // seafoam kelp
+		warn:         cliColor{"#e3aa5a", 179}, // warm amber
+		err:          cliColor{"#e58a6f", 209}, // warm coral
+		danger:       cliColor{"#e5565a", 203}, // alarm coral-red
+		border:       cliColor{"#3a2a22", 236}, // warm coal-brown border
+		selection:    cliColor{"#e0875c", 173},
+		userBubbleBG: cliColor{"#2c1d15", 236}, // warm panel — clearly lifted, brighter than the tool surface
+		diffAddBG:    cliColor{"#18291d", 22},  // warm-tinted dark green
+		diffDelBG:    cliColor{"#321a17", 52},  // warm-tinted dark red
+		toolRead:     cliColor{"#6fcabf", 79},  // seafoam (calmer than cyan)
+		toolProc:     cliColor{"#c98fd0", 176}, // soft violet
+		surface:      cliColor{"#1b1410", 234}, // tool-panel fill, dimmer than the user bubble
+		surfaceLift:  cliColor{"#1e1712", 234}, // top row, +~4 luma toward the lamp (never +5 — that bands)
+		surfaceSeam:  cliColor{"#241a13", 235}, // lit edge at col 3
+		text:         cliColor{"#ece0d4", 253}, // warm off-white body text
+		ink:          cliColor{"#15100d", 233}, // warm near-black page canvas (painted across the screen)
 	}
 	cliLightTheme = cliPalette{
 		name:         "light",
@@ -80,12 +95,18 @@ var (
 		diffDelBG:    cliColor{"#fae8e8", 255},
 		toolRead:     cliColor{"#6f91d9", 68},
 		toolProc:     cliColor{"#8a6bb8", 97},
+		surface:      cliColor{"#f1ece2", 254}, // warm paper panel fill
+		surfaceLift:  cliColor{"#f6f1e7", 255}, // top row, +~4 luma toward ink (brighter, not darker)
+		surfaceSeam:  cliColor{"#f8f2e6", 255}, // lit edge at col 3
+		text:         cliColor{"#2e2a24", 236}, // warm near-black body text
+		ink:          cliColor{"#faf5ec", 255}, // warm paper page canvas
 	}
 	cliThemeStyles = []cliThemeStyle{
 		{name: "graphite", mode: "dark", accent: cliColor{"#d97757", 173}, description: "warm clay accent"},
 		{name: "ember", mode: "dark", accent: cliColor{"#f06d38", 209}, description: "hot orange accent"},
 		{name: "aurora", mode: "dark", accent: cliColor{"#34c3a6", 79}, description: "cool teal accent"},
 		{name: "midnight", mode: "dark", accent: cliColor{"#b18cff", 141}, description: "quiet violet accent"},
+		{name: "glitch", mode: "dark", accent: cliColor{"#ff3df2", 201}, description: "neon magenta terminal"},
 		{name: "sandstone", mode: "light", accent: cliColor{"#c2613f", 173}, description: "default warm light accent"},
 		{name: "porcelain", mode: "light", accent: cliColor{"#7d63c8", 104}, description: "soft violet light accent"},
 		{name: "linen", mode: "light", accent: cliColor{"#bd5d4d", 167}, description: "muted coral light accent"},
@@ -170,6 +191,20 @@ func applyCLIThemeStyle(base cliPalette, style cliThemeStyle) cliPalette {
 	base.style = style.name
 	base.accent = style.accent
 	base.selection = style.accent
+	if style.name == "glitch" {
+		base.muted = cliColor{"#b8fff7", 159}
+		base.faint = cliColor{"#6f7f91", 245}
+		base.border = cliColor{"#203345", 24}
+		base.selection = cliColor{"#00e5ff", 45}
+		base.userBubbleBG = cliColor{"#171527", 234}
+		base.toolRead = cliColor{"#00e5ff", 45}
+		base.toolProc = cliColor{"#ff3df2", 201}
+		base.surface = cliColor{"#12101f", 233}
+		base.surfaceLift = cliColor{"#16131f", 234}
+		base.surfaceSeam = cliColor{"#1a1530", 235}
+		base.text = cliColor{"#d7e9f2", 195} // cool glow text for the neon style
+		base.ink = cliColor{"#0c0a16", 233}  // deep violet-black canvas
+	}
 	return base
 }
 
@@ -332,8 +367,11 @@ func supportsTrueColor() bool {
 	if strings.Contains(ct, "truecolor") || strings.Contains(ct, "24bit") {
 		return true
 	}
+	if os.Getenv("WT_SESSION") != "" { // Windows Terminal — full 24-bit since 2019
+		return true
+	}
 	switch os.Getenv("TERM_PROGRAM") {
-	case "iTerm.app", "WezTerm", "vscode":
+	case "iTerm.app", "WezTerm", "vscode", "WarpTerminal", "ghostty", "rio":
 		return true
 	default:
 		return false
@@ -385,17 +423,37 @@ func init() {
 
 func refreshCLIStyles() {
 	inputBoxStyle = withThemeBorderFG(lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder(), true, false, true, false), activeCLITheme.accent).
+		Border(lipgloss.ThickBorder(), true, false, true, false), activeCLITheme.accent).
 		PaddingLeft(1)
-	approvalBannerStyle = withThemeFG(withThemeBorderFG(lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder(), true, false, true, false), activeCLITheme.warn), activeCLITheme.warn).
-		Bold(true).
+	// The approval gate shares the chooser's thin (Normal) chassis; risk is carried
+	// by the per-render border colour (amber for destructive, copper for benign,
+	// set in frameApproval) and by the highlighted default row — not by a
+	// permanently-loud thick amber frame that trains alarm-fatigue.
+	approvalBannerStyle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), true, false, true, false).
 		PaddingLeft(1)
 	todoPanelStyle = withThemeBorderFG(lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder(), true, false, false, false), activeCLITheme.border).
+		Border(lipgloss.ThickBorder(), true, false, false, false), activeCLITheme.border).
 		PaddingLeft(1)
-	statusBlockStyle = themeStyle(activeCLITheme.faint)
-	workingStyle = themeStyle(activeCLITheme.faint)
+	if colorEnabled {
+		// The status block is rendered at the page's ambient `ink` colour, not
+		// on a `surface` panel. Painting it with `surface` here made the
+		// unused right-hand cells read as a near-black band — in the dark
+		// theme `surface` (#1b1410, luma 234) and `ink` (#15100d, luma 233)
+		// are one step apart, so the band looked identical to a "no fill"
+		// background and visually it read as a black strip behind the text.
+		// Leaving Background unset lets those cells fall through to the
+		// page-level ink paint, which is the same colour the rest of the
+		// transcript already lives on, so the seam disappears.
+		statusBlockStyle = lipgloss.NewStyle().
+			Foreground(themeLipColor(activeCLITheme.faint))
+		workingStyle = lipgloss.NewStyle().
+			Foreground(themeLipColor(activeCLITheme.text)).
+			Bold(true)
+	} else {
+		statusBlockStyle = lipgloss.NewStyle()
+		workingStyle = lipgloss.NewStyle().Bold(true)
+	}
 	compSelStyle = themeStyle(activeCLITheme.accent).Bold(true)
 	choicePanelStyle = withThemeBorderFG(lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder(), true, false, true, false), activeCLITheme.accent).

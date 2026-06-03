@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestToolCard(t *testing.T) {
@@ -29,6 +31,15 @@ func TestToolCard(t *testing.T) {
 			if strings.Contains(got, d) {
 				t.Errorf("%s: %q should not contain raw arg %q", c.name, got, d)
 			}
+		}
+	}
+}
+
+func TestToolCardClampsToWidth(t *testing.T) {
+	for _, width := range []int{32, 80} {
+		got := toolCard("bash", `{"command":"`+strings.Repeat("x", 200)+`"}`, width)
+		if w := ansi.StringWidth(ansi.Strip(got)); w > width {
+			t.Fatalf("tool card width = %d, want <= %d:\n%s", w, width, ansi.Strip(got))
 		}
 	}
 }

@@ -518,7 +518,7 @@ export function Composer({
     const composing = isImeKeyEvent(e, composingRef.current, lastCompositionEndAt.current);
     if (e.key === "Enter" && composing) return;
 
-    // Shift+Tab cycles the input mode (normal → plan → YOLO → normal). Handled
+    // Shift+Tab toggles the input mode (normal ↔ YOLO). Handled
     // before the menus so it works even while one is open.
     if (e.key === "Tab" && e.shiftKey && !composing) {
       e.preventDefault();
@@ -731,7 +731,7 @@ export function Composer({
             title={t("composer.modeTitle")}
           >
             <span className="composer__mode-dot" />
-            {mode === "yolo" ? t("composer.modeYolo") : mode === "plan" ? t("composer.modePlan") : t("composer.modeNormal")}
+            {mode === "yolo" ? t("composer.modeYolo") : t("composer.modeNormal")}
             <span className="composer__mode-hint">{t("composer.modeHint")}</span>
           </button>
         </div>

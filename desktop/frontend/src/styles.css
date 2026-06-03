@@ -1,5 +1,5 @@
 /*
- * Reasonix desktop — single-column, developer-dense, terminal-flavored chat UI.
+ * Roach Code desktop — single-column, developer-dense, terminal-flavored chat UI.
  *
  * Multi-platform notes:
  *  - System font stack only; no web-font fetches (offline-first, consistent).
@@ -85,8 +85,6 @@
   --pill-border: var(--border);
   --pill-fg: var(--fg-dim);
   --pill-hover-bg: var(--bg-elev-2);
-  --pill-plan-bg: var(--accent-soft);
-  --pill-plan-border: color-mix(in srgb, var(--accent) 24%, var(--border));
   --pill-yolo-bg: var(--danger);
   --pill-yolo-bg-hover: color-mix(in srgb, var(--danger) 90%, var(--fg));
   --pill-yolo-border: var(--danger);
@@ -1913,10 +1911,6 @@ body {
 .statusbar__spacer {
   flex: 1;
 }
-.statusbar__plan {
-  color: var(--accent);
-  letter-spacing: 0.6px;
-}
 /* model switcher (bottom-of-window popover) */
 .modelsw {
   position: relative;
@@ -2121,10 +2115,6 @@ body {
 }
 
 /* composer-integrated approval shelf */
-.modal--plan {
-  max-width: 560px;
-}
-
 .approval-shelf {
   max-width: var(--maxw);
   margin: 0 auto 8px;
@@ -2250,37 +2240,6 @@ body {
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12);
   padding: 10px;
 }
-.plan-revision {
-  margin-top: 6px;
-}
-.plan-revision__input {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 72px;
-  resize: vertical;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--fg);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.45;
-  padding: 9px 10px;
-}
-.plan-revision__input:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-.plan-revision__input::placeholder {
-  color: var(--fg-faint);
-}
-.plan-revision__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
 .approval-subject {
   margin: 0;
   padding: 9px 11px;
@@ -2376,13 +2335,6 @@ body {
 .ask-q__custom::placeholder {
   color: var(--fg-faint);
 }
-.modal__plannote {
-  margin: 0 0 16px;
-  color: var(--fg-dim);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
 /* ── highlight.js token theme (mapped to palette) ────────────────────────── */
 .hljs-comment,
 .hljs-quote {
@@ -4741,16 +4693,6 @@ body {
   outline: none;
   box-shadow: var(--focus-ring);
 }
-.composer__mode--plan {
-  background: var(--pill-plan-bg);
-  border-color: var(--pill-plan-border);
-  color: var(--accent);
-}
-.composer__mode--plan:hover {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--pill-plan-bg) 70%, var(--bg-elev));
-  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
-}
 .composer__mode--yolo {
   background: var(--pill-yolo-bg);
   border-color: var(--pill-yolo-border);
@@ -4768,9 +4710,6 @@ body {
   border-radius: 50%;
   background: var(--fg-faint);
   flex-shrink: 0;
-}
-.composer__mode--plan .composer__mode-dot {
-  background: var(--accent);
 }
 .composer__mode--yolo .composer__mode-dot {
   background: var(--danger-fg);

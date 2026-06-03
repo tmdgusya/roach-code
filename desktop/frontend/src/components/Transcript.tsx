@@ -185,7 +185,6 @@ export function Transcript({
           case "tool":
             if (it.parentId) return null; // rendered nested under its parent
             if (it.name === "todo_write") return null; // shown live in the pinned TodoPanel
-            if (it.name === "exit_plan_mode") return null; // the plan was shown in the approval card
             return <ToolCard key={it.id} item={it} subcalls={subcallsByParent.get(it.id)} />;
           case "phase":
             return (

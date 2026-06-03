@@ -214,16 +214,6 @@ func (a *App) Approve(id string, allow, session bool) {
 	}
 }
 
-// SetPlanMode toggles read-only plan mode.
-func (a *App) SetPlanMode(on bool) {
-	a.mu.RLock()
-	ctrl := a.ctrl
-	a.mu.RUnlock()
-	if ctrl != nil {
-		ctrl.SetPlanMode(on)
-	}
-}
-
 // QuestionAnswer is the frontend's reply to one question in an ask_request.
 type QuestionAnswer struct {
 	QuestionID string   `json:"questionId"`

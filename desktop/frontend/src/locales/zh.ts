@@ -129,17 +129,10 @@ export const zh: Record<DictKey, string> = {
 
   // 输入框
   "composer.placeholder": "给 Roach Code 发消息…  ( / 命令 · @ 文件 )",
-  "composer.planMode": "计划模式",
-  "composer.planModeOn": "计划模式已开",
-  "composer.planHint": "shift+tab",
-  "composer.planHintExit": "shift+tab 退出",
   "composer.modeNormal": "普通",
-  "composer.modePlan": "计划模式",
   "composer.modeYolo": "YOLO",
   "composer.modeHint": "shift+tab",
-  "composer.modeTitle": "切换模式（shift+tab）：普通 → 计划 → YOLO（全部自动批准）",
-  "composer.enterPlanTitle": "进入计划模式（shift+tab）—— 只读；先给出计划再动手",
-  "composer.exitPlanTitle": "退出计划模式（shift+tab）",
+  "composer.modeTitle": "切换 YOLO 模式（shift+tab）",
   "composer.searchProjects": "搜索项目",
   "composer.noProjectMatches": "没有匹配的项目",
   "composer.addProject": "添加新项目",
@@ -155,7 +148,6 @@ export const zh: Record<DictKey, string> = {
   // 状态栏
   "status.connecting": "连接中…",
   "status.ctx": "{pct}% 上下文",
-  "status.plan": "计划",
   "status.switchModel": "切换模型",
   "status.noModels": "未配置任何模型",
   "status.effort": "effort {level}",
@@ -172,13 +164,6 @@ export const zh: Record<DictKey, string> = {
   "status.yoloTitle": "YOLO —— 本会话正在跳过所有批准",
 
   // 审批弹窗
-  "approval.planReady": "计划已就绪",
-  "approval.planReadyHint": "查看上方方案",
-  "approval.startExecution": "开始执行",
-  "approval.revisePlan": "修改计划",
-  "approval.revisePlanPlaceholder": "告诉我这份计划还需要改哪里...",
-  "approval.sendRevision": "发送修改意见",
-  "approval.exitPlan": "退出计划",
   "approval.toolPending": "允许工具调用",
   "approval.details": "详情",
   "approval.hideDetails": "收起",

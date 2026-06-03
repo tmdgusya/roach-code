@@ -1,6 +1,6 @@
 // Package control is the transport-agnostic session driver. A Controller owns
 // the agent run loop and session lifecycle, takes commands (Send/Cancel/Approve/
-// SetPlanMode/Compact/NewSession/…), and emits everything that happens —
+// Compact/NewSession/…), and emits everything that happens —
 // reasoning, tool calls, approvals, turn completion — as a typed event stream to
 // a single event.Sink.
 //
@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,8 +58,6 @@ type Controller struct {
 	hooks        *hook.Runner // session hook runner; nil-safe (no hooks configured)
 	mem          *memory.Set
 	cleanup      func()
-	autoPlan     string
-	classifier   autoPlanClassifier
 	startedOnce  bool // guards the one-shot SessionStart hook on first turn
 
 	// balanceURL/balanceKey target the active provider's optional wallet-balance
@@ -105,7 +104,6 @@ type Controller struct {
 	mu          sync.Mutex
 	cancel      context.CancelFunc
 	running     bool
-	planMode    bool
 	sessionPath string
 	approvals   map[string]chan approvalReply
 	asks        map[string]chan []event.AskAnswer
@@ -113,12 +111,6 @@ type Controller struct {
 	nextID      int
 	// turn counts model turns this session, passed to hooks in their payload.
 	turn int
-	// autoApprove auto-allows writer tool calls without prompting. Set only while
-	// executing a just-approved plan: approving the plan is the go-ahead, so the
-	// model shouldn't re-prompt for every write of the work it just got cleared to
-	// do. Deny rules still bite (those never reach the approver). Reset when the
-	// execution turn returns.
-	autoApprove bool
 
 	// bypass is "YOLO" mode: while set, every approval prompt is auto-allowed for
 	// the rest of the session (writers and bash run without asking). It is a
@@ -133,6 +125,22 @@ type Controller struct {
 	// a fresh memory takes effect this session without busting the prompt cache;
 	// it joins the prefix naturally on the next session.
 	pendingMemory []string
+
+	// goal* implement the /goal feature: a session-scoped "keep working until this
+	// condition holds" loop (runGoalLoop, at the tail of a turn). goalCond is the
+	// active natural-language condition ("" = off); the loop re-prompts the agent
+	// with a tail-appended message until the model's own trailing GOAL_STATUS
+	// verdict says met, the work stalls (no new messages), or the user cancels.
+	// goalAutoApp auto-approves goal-loop writes without affecting normal approval
+	// policy. goalHit0/goalMiss0 snapshot SessionCache at arm time for the
+	// loop-isolated cache% readout. All guarded by c.mu.
+	goalCond    string
+	goalIter    int
+	goalNudge   string
+	goalStall   int
+	goalHit0    int
+	goalMiss0   int
+	goalAutoApp bool
 }
 
 type approvalReply struct {
@@ -172,8 +180,6 @@ type Options struct {
 	// WorkspaceRoot is the project root checkpoint restores are confined to ("" =
 	// no confinement). Frontends pass the cwd they launched the session in.
 	WorkspaceRoot string
-	AutoPlan      string
-	Classifier    autoPlanClassifier
 }
 
 // New builds a Controller. A nil Sink is replaced with event.Discard.
@@ -181,10 +187,6 @@ func New(opts Options) *Controller {
 	sink := opts.Sink
 	if nilutil.IsNil(sink) {
 		sink = event.Discard
-	}
-	classifier := opts.Classifier
-	if nilutil.IsNil(classifier) {
-		classifier = nil
 	}
 	pluginCtx := opts.PluginCtx
 	if pluginCtx == nil {
@@ -205,8 +207,6 @@ func New(opts Options) *Controller {
 		hooks:         opts.Hooks,
 		mem:           opts.Memory,
 		cleanup:       opts.Cleanup,
-		autoPlan:      normalizeAutoPlan(opts.AutoPlan),
-		classifier:    classifier,
 		balanceURL:    opts.BalanceURL,
 		balanceKey:    opts.BalanceKey,
 		balanceClient: opts.BalanceClient,
@@ -299,45 +299,59 @@ func (c *Controller) runGuarded(body func(ctx context.Context) error) {
 }
 
 // Send starts a turn with an uncomposed message. The controller applies
-// auto-plan, plan-mode, memory, and background-job framing inside the async turn
+// inside the async turn path.
 // path so frontends do not block on classifier I/O.
 func (c *Controller) Send(input string) {
 	c.SendWithRaw(input, input)
 }
 
-// SendWithRaw starts a turn with separate model input and raw prompt text. The
-// raw prompt is used only for auto-plan scoring; it deliberately excludes
-// resolved @-reference payloads so referenced file contents cannot inflate the
-// complexity score.
+// SendWithRaw starts a turn with separate model input and raw prompt text.
 func (c *Controller) SendWithRaw(input, raw string) {
 	c.runGuarded(func(ctx context.Context) error { return c.runTurnWithRaw(ctx, input, raw) })
 }
 
-// planApprovalTool is the Tool name on the ApprovalRequest the controller emits
-// to gate a proposed plan. Frontends key their plan-approval UI on it (the
-// desktop renders a plan card; the chat TUI a plan banner).
-const planApprovalTool = "exit_plan_mode"
+// goalContinuationFmt is the tail-appended re-prompt the goal loop sends when the
+// condition isn't met yet. It is a RAW user message (the runner appends it to the
+// and the re-run turn rides a near-full cache hit. First %s = the goal condition;
+// second %s = an optional "Last check: <prior nudge>. " steer carrying the model's
+// own last self-identified next step.
+const goalContinuationFmt = "You are working toward a standing goal for this session:\n\n  %s\n\n" +
+	"This goal is NOT yet satisfied. Continue now, without waiting for confirmation: take the next " +
+	"concrete step toward it. %sWhen you finish this turn, judge honestly whether the goal is now " +
+	"fully satisfied by the current project state, and END your reply with exactly one line:\n" +
+	"  GOAL_STATUS: met — <one sentence why>\n" +
+	"if and only if it is fully done, otherwise end with:\n" +
+	"  GOAL_STATUS: unmet — <the single most important next step>\n" +
+	"Do not write a GOAL_STATUS line anywhere except as the very last line of your reply."
 
-// planApprovedMessage is the follow-up turn sent once the user approves a plan —
-// the in-context nudge to execute and keep the (already-seeded) task list honest.
-const planApprovedMessage = "Plan approved — plan mode is off; you're cleared to make the changes without asking again. Implement the plan now. Keep the task list current with todo_write, preserving its two-level shape (phases at level 0, their sub-steps at level 1): mark the sub-step you start as in_progress, one in_progress at a time. Sign off each finished sub-step with complete_step, attaching the evidence it's done — the verification you ran, the diff/files you changed, or a manual check. Don't claim a step is done without evidence."
+// goalStatusRE matches the folded-sentinel verdict the model ends a goal turn with.
+// The separator may be an em-dash or hyphen and may be absent; the reason / next
+// step is captured (possibly empty).
+var goalStatusRE = regexp.MustCompile(`(?im)^[ \t>]*GOAL_STATUS:[ \t]*(met|unmet)\b[ \t]*[—-]?[ \t]*(.*?)[ \t]*$`)
 
-// runTurn runs one model turn, then applies the plan-approval gate. This is the
-// single, frontend-agnostic plan flow: in plan mode the model just researches
-// (writers are blocked) and writes its plan as a normal answer — no special tool.
-// When the turn ends with a text proposal, the controller asks the user to
-// approve (reusing the ApprovalRequest channel both frontends already render);
-// on approval it exits plan mode, seeds the task list from the plan, and
-// continues straight into execution; on rejection it stays in plan mode so the
-// next turn can revise. Plan mode is only ever set interactively, so the headless
-// `Run` path (which doesn't call this) never blocks on a prompt.
+// StripGoalVerdict removes a trailing GOAL_STATUS sentinel line from assistant text
+// for DISPLAY. The controller reads the verdict from the raw session message (so the
+// cache-stable prefix keeps it byte-for-byte and the folded judge stays cache-neutral);
+// frontends call this only when committing the answer to the visible transcript. It
+// strips solely when the sentinel is the final content, so it can never eat real text.
+func StripGoalVerdict(s string) string {
+	loc := goalStatusRE.FindStringIndex(s)
+	if loc == nil {
+		return s
+	}
+	if strings.TrimSpace(s[loc[1]:]) != "" {
+		return s // not the final line — leave it (defensive; the prompt forbids this)
+	}
+	return strings.TrimRight(s[:loc[0]], " \t\n")
+}
+
+// runTurn runs one model turn, then applies the goal loop.
 func (c *Controller) runTurn(ctx context.Context, input string) error {
 	return c.runTurnWithRaw(ctx, input, input)
 }
 
-func (c *Controller) runTurnWithRaw(ctx context.Context, input, raw string) error {
+func (c *Controller) runTurnWithRaw(ctx context.Context, input, _ string) error {
 	c.maybeSessionStart(ctx)
-	c.maybeAutoPlan(ctx, raw)
 	input = c.Compose(input)
 	startMessages := c.messageCount()
 	defer c.snapshotActivityIfChanged(startMessages)
@@ -360,42 +374,11 @@ func (c *Controller) runTurnWithRaw(ctx context.Context, input, raw string) erro
 	if err := c.runner.Run(ctx, input); err != nil {
 		return err
 	}
-	c.mu.Lock()
-	plan := c.planMode
-	c.mu.Unlock()
-	if !plan {
-		return nil
-	}
-	proposal := lastAssistantText(c.History())
-	if proposal == "" {
-		return nil // no substantive proposal to gate
-	}
-	// The plan is already visible as the assistant's answer, so the request
-	// carries no subject — it's purely the gate.
-	allow, _, err := c.requestApproval(ctx, planApprovalTool, "")
-	if err != nil {
-		return err
-	}
-	if !allow {
-		return nil // keep planning; plan mode stays on
-	}
-	c.SetPlanMode(false)
-	c.seedPlanTodos(proposal)
-	// The plan is the go-ahead: don't re-prompt for each write of the approved
-	// work. Auto-approve writers for the duration of this execution turn only.
-	c.mu.Lock()
-	c.autoApprove = true
-	c.mu.Unlock()
-	defer func() {
-		c.mu.Lock()
-		c.autoApprove = false
-		c.mu.Unlock()
-	}()
-	return c.runner.Run(ctx, planApprovedMessage)
+	return c.runGoalLoop(ctx)
 }
 
 // lastAssistantText returns the content of the most recent assistant message with
-// non-empty text — the model's final answer for the turn (its plan, in plan mode).
+// non-empty text.
 func lastAssistantText(msgs []provider.Message) string {
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msgs[i].Role == provider.RoleAssistant && strings.TrimSpace(msgs[i].Content) != "" {
@@ -405,8 +388,170 @@ func lastAssistantText(msgs []provider.Message) string {
 	return ""
 }
 
+// runGoalLoop is the goal feature's heart, called at the tail of a turn. While a
+// goal is armed it re-prompts the agent — appending a tail-only user message so the
+// cache-stable prefix is untouched and the visible live line. A nil/empty goal
+// makes it a no-op.
+func (c *Controller) runGoalLoop(ctx context.Context) error {
+	c.mu.Lock()
+	cond := c.goalCond
+	c.mu.Unlock()
+	if cond == "" {
+		return nil
+	}
+	// since bounds which messages parseGoalVerdict may read: the just-finished turn
+	// is the newest assistant text, so 0 is correct for the first check; thereafter
+	// it's the message count captured before each continuation, so a turn that ends
+	// without a verdict can never re-read a prior iteration's verdict (anti-staleness).
+	since := 0
+	for {
+		if ctx.Err() != nil {
+			return nil // user cancel — keep the goal armed, never read it as "unmet"
+		}
+		met, _, nudge := parseGoalVerdict(c.History(), since)
+		if met {
+			c.clearGoal()
+			c.notice(goalNotice("goal met — " + nudge))
+			return nil // auto-clear: the signature beat
+		}
+		before := c.messageCount()
+		c.mu.Lock()
+		c.goalIter++
+		c.goalNudge = nudge
+		c.goalAutoApp = true
+		c.mu.Unlock()
+		steer := ""
+		if s := strings.TrimSpace(strings.TrimSuffix(nudge, ".")); s != "" {
+			steer = "Last check: " + s + ". "
+		}
+		since = before // this iteration's verdict must come from messages added below
+		err := c.runner.Run(ctx, fmt.Sprintf(goalContinuationFmt, cond, steer))
+		c.mu.Lock()
+		c.goalAutoApp = false
+		c.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		if ctx.Err() != nil {
+			return nil // cancel landed during the run
+		}
+		if c.messageCount() <= before { // no-progress stall detector (the only auto-bound)
+			c.mu.Lock()
+			c.goalStall++
+			stalled := c.goalStall >= 2
+			c.mu.Unlock()
+			if stalled {
+				c.pauseGoal(goalNotice("goal paused — the last attempts made no progress"))
+				return nil
+			}
+		} else {
+			c.mu.Lock()
+			c.goalStall = 0
+			c.mu.Unlock()
+		}
+	}
+}
+
+// parseGoalVerdict reads the model's folded GOAL_STATUS verdict from the NEWEST
+// assistant message with text at index >= since, scanning only its final few lines.
+// It stops at the first such message, so a turn that ended without a verdict never
+// inherits an older one. present is false when no verdict was found (treated by the
+// caller as unmet — a fail-safe toward "keep working").
+func parseGoalVerdict(msgs []provider.Message, since int) (met, present bool, nudge string) {
+	if since < 0 {
+		since = 0
+	}
+	for i := len(msgs) - 1; i >= since; i-- {
+		if msgs[i].Role != provider.RoleAssistant || strings.TrimSpace(msgs[i].Content) == "" {
+			continue
+		}
+		lines := strings.Split(strings.TrimRight(msgs[i].Content, "\n"), "\n")
+		for j := len(lines) - 1; j >= 0 && j > len(lines)-4; j-- {
+			if mm := goalStatusRE.FindStringSubmatch(lines[j]); mm != nil {
+				return strings.EqualFold(mm[1], "met"), true, strings.TrimSpace(mm[2])
+			}
+		}
+		return false, false, "" // newest assistant text carries no verdict → unmet
+	}
+	return false, false, "" // no assistant text in the new region → unmet
+}
+
+// goalNotice prefixes a goal status line with the accent dot the chat TUI uses, and
+// clips an overlong tail so a verbose nudge can't blow up the status notice.
+func goalNotice(s string) string {
+	const max = 100
+	if len(s) > max {
+		s = strings.TrimSpace(s[:max]) + "…"
+	}
+	return "● " + s
+}
+
+// SetGoal arms a session goal: the next/after-current turn keeps working until the
+// model judges the condition met (or the loop stalls / the user stops it). Snapshots
+// SessionCache so the status line can show the loop-isolated cache rate.
+func (c *Controller) SetGoal(cond string) {
+	hit, miss := c.SessionCache()
+	c.mu.Lock()
+	c.goalCond, c.goalIter, c.goalNudge, c.goalStall = cond, 0, "", 0
+	c.goalHit0, c.goalMiss0 = hit, miss
+	c.goalAutoApp = false
+	c.mu.Unlock()
+}
+
+// ClearGoal clears the goal immediately and cancels any in-flight loop so /goal clear
+// stops the grind now (the loop sees the cancelled ctx at its next check).
+func (c *Controller) ClearGoal() {
+	c.clearGoal()
+	c.Cancel()
+}
+
+func (c *Controller) clearGoal() {
+	c.mu.Lock()
+	c.goalCond, c.goalIter, c.goalNudge, c.goalStall, c.goalAutoApp = "", 0, "", 0, false
+	c.mu.Unlock()
+}
+
+// pauseGoal clears the goal (so the loop ends) and surfaces why — used when the work
+// stalls. "Pause" framing: the condition is dropped but stays valid for a fresh /goal.
+func (c *Controller) pauseGoal(note string) {
+	c.clearGoal()
+	c.notice(note)
+}
+
+// Goal returns the active condition ("" = none) and the live continuation count.
+func (c *Controller) Goal() (cond string, iter int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.goalCond, c.goalIter
+}
+
+// GoalNudge returns the model's last self-identified next step (drives the live line).
+func (c *Controller) GoalNudge() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.goalNudge
+}
+
+// GoalLoopHitPct returns the loop-isolated prompt cache-hit rate since the goal was
+// armed (Σ-delta from the arm-time SessionCache baseline), so the status line can show
+// the goal iterations' own cache rate rather than the diluted session average.
+func (c *Controller) GoalLoopHitPct() (pct int, active bool) {
+	c.mu.Lock()
+	on, h0, m0 := c.goalCond != "", c.goalHit0, c.goalMiss0
+	c.mu.Unlock()
+	if !on {
+		return 0, false
+	}
+	hit, miss := c.SessionCache()
+	dh, dm := hit-h0, miss-m0
+	if dh+dm <= 0 {
+		return 0, true
+	}
+	return dh * 100 / (dh + dm), true
+}
+
 // Submit is the one-call entry for a simple frontend: it takes raw user input
-// and does everything — slash-command dispatch, @-reference expansion, plan-mode
+// and does everything — slash-command dispatch, @-reference expansion, memory
 // composition — emitting all output as events. The HTTP/SSE server uses this so
 // a browser client only POSTs the typed line.
 //
@@ -437,6 +582,25 @@ func (c *Controller) Submit(input string) {
 				c.notice("new session")
 			}
 		}()
+	case trimmed == "/goal" || strings.HasPrefix(trimmed, "/goal "):
+		arg := strings.TrimSpace(strings.TrimPrefix(trimmed, "/goal"))
+		switch {
+		case arg == "":
+			if g, n := c.Goal(); g != "" {
+				c.notice(fmt.Sprintf("● goal active (×%d): %s", n, g))
+			} else {
+				c.notice("no active goal")
+			}
+		case arg == "clear" || arg == "off":
+			c.ClearGoal()
+			c.notice("● goal cleared")
+		default:
+			c.SetGoal(arg)
+			c.notice("● goal set — keep working until: " + arg)
+			if !c.Running() {
+				c.Send(arg) // kick the first turn; runGoalLoop engages at its tail
+			}
+		}
 	case strings.HasPrefix(trimmed, "#"):
 		// "#<note>" quick-adds a memory line — same shortcut as the chat TUI, so
 		// the desktop and HTTP frontends (which route raw input through Submit)
@@ -638,26 +802,6 @@ func (c *Controller) AnswerQuestion(id string, answers []event.AskAnswer) {
 	if reply != nil {
 		reply <- answers // buffered, never blocks
 	}
-}
-
-// SetPlanMode flips the executor's read-only gate without touching the
-// cache-stable prompt prefix, and remembers the state so Compose can prepend the
-// plan-mode marker to outgoing turns.
-func (c *Controller) SetPlanMode(v bool) {
-	c.mu.Lock()
-	c.planMode = v
-	c.mu.Unlock()
-	if c.executor != nil {
-		c.executor.SetPlanMode(v)
-	}
-}
-
-// PlanMode reports whether outgoing turns currently receive the plan-mode
-// marker. Frontends use it after Compose because auto-plan may flip the mode.
-func (c *Controller) PlanMode() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.planMode
 }
 
 // Compact runs one compaction pass on the executor's session on demand.
@@ -1527,142 +1671,16 @@ func (c *Controller) refreshMemoryLocked() {
 type gateApprover struct{ c *Controller }
 
 func (g gateApprover) Approve(ctx context.Context, tool, subject string, args json.RawMessage) (bool, bool, error) {
-	// Auto-allow without prompting while executing a just-approved plan (the plan
-	// was the approval) or while YOLO/bypass mode is on. Deny rules already bit
-	// before this point, so they still block.
+	// Auto-allow without prompting while a goal loop is making progress or while
+	// YOLO/bypass mode is on. Deny rules already bit before this point, so they
+	// still block.
 	g.c.mu.Lock()
-	auto := g.c.autoApprove || g.c.bypass
+	auto := g.c.goalAutoApp || g.c.bypass
 	g.c.mu.Unlock()
 	if auto {
 		return true, false, nil
 	}
 	return g.c.requestApproval(ctx, tool, subject)
-}
-
-type seedTodo struct {
-	Content string `json:"content"`
-	Status  string `json:"status"`
-	Level   int    `json:"level,omitempty"`
-}
-
-// seedPlanTodos turns an approved plan into a starter task list and emits it as a
-// synthetic todo_write event, so the live task panel populates the instant the
-// user approves — a structural guarantee, not a prompt the model might ignore.
-// The model still flips item status as it works (only it knows its own
-// progress); this just makes the list exist. No-op when the plan has no list.
-func (c *Controller) seedPlanTodos(plan string) {
-	args := PlanTodosJSON(plan)
-	if args == "" {
-		return
-	}
-	t := event.Tool{ID: "plan-seed", Name: "todo_write", Args: args, ReadOnly: true}
-	c.sink.Emit(event.Event{Kind: event.ToolDispatch, Tool: t})
-	t.Output = "task list seeded from the approved plan"
-	c.sink.Emit(event.Event{Kind: event.ToolResult, Tool: t})
-}
-
-// PlanTodosJSON parses an approved plan's markdown into todo_write-shaped args
-// JSON ({"todos":[...]}), or "" when the plan has no list items. The exit_plan_mode
-// path seeds via seedPlanTodos (an event); a frontend whose own approval flow
-// bypasses exit_plan_mode (the chat TUI's text-plan approval) calls this directly
-// to render the same starter checklist. Shared parsing keeps the two consistent.
-func PlanTodosJSON(plan string) string {
-	items := parsePlanTodos(plan)
-	if len(items) == 0 {
-		return ""
-	}
-	b, err := json.Marshal(map[string]any{"todos": items})
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}
-
-// parsePlanTodos extracts a starter task list from an approved plan's markdown
-// list items (bulleted or numbered): the first is in_progress, the rest pending,
-// capped so a long plan can't flood the panel. It understands ONLY markdown lists
-// — an unambiguous, standard structure — and deliberately does not guess at prose,
-// tables, or arrow sequences (those need brittle, language-specific heuristics).
-// The plan-mode marker steers the model to present its plan as a list, so this
-// catches the normal case; anything it misses is covered by the model's own
-// todo_write calls as it executes.
-func parsePlanTodos(plan string) []seedTodo {
-	var todos []seedTodo
-	for _, raw := range strings.Split(plan, "\n") {
-		item, level, ok := listItem(raw)
-		if !ok {
-			continue
-		}
-		status := "pending"
-		if len(todos) == 0 {
-			status = "in_progress"
-		}
-		todos = append(todos, seedTodo{Content: item, Status: status, Level: level})
-		if len(todos) >= 20 {
-			break
-		}
-	}
-	return todos
-}
-
-// listItem parses a markdown list line ("- x", "* x", "1. x", "2) x") into its
-// task text and a nesting level derived from leading indentation (0 for a
-// top-level item, 1 for an indented sub-step — capped at 1 since the plan is
-// two-level). ok is false when the line isn't a list item. Light inline-markdown
-// stripping keeps the checklist readable.
-func listItem(line string) (content string, level int, ok bool) {
-	trimmed := strings.TrimLeft(line, " \t")
-	if trimmed == "" {
-		return "", 0, false
-	}
-	indent := 0
-	for _, c := range line[:len(line)-len(trimmed)] {
-		if c == '\t' {
-			indent += 4
-		} else {
-			indent++
-		}
-	}
-	s := trimmed
-	// A numbered markdown heading ("### 1. Add the loader") is how models often
-	// write a phase even when asked for a list; strip the heading marker and
-	// treat it as a top-level phase. A heading without a number (a section
-	// title like "## Plan") falls through and is ignored.
-	heading := false
-	if h := strings.TrimLeft(s, "#"); h != s && strings.HasPrefix(h, " ") {
-		heading = true
-		s = strings.TrimSpace(h)
-	}
-	switch {
-	case strings.HasPrefix(s, "- "), strings.HasPrefix(s, "* "), strings.HasPrefix(s, "+ "):
-		s = s[2:]
-	default:
-		// numbered: leading digits, then "." or ")", then a space
-		i := 0
-		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
-			i++
-		}
-		if i == 0 || i+1 >= len(s) || (s[i] != '.' && s[i] != ')') || s[i+1] != ' ' {
-			return "", 0, false
-		}
-		s = s[i+2:]
-	}
-	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "[ ] ")
-	s = strings.TrimPrefix(s, "[x] ")
-	s = strings.ReplaceAll(s, "`", "")
-	s = strings.ReplaceAll(s, "**", "")
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return "", 0, false
-	}
-	if heading {
-		return s, 0, true // a heading is always a top-level phase
-	}
-	if indent >= 2 {
-		return s, 1, true
-	}
-	return s, 0, true
 }
 
 // requestApproval emits an ApprovalRequest and blocks until Approve(ID, …)
@@ -1672,10 +1690,9 @@ func (c *Controller) requestApproval(ctx context.Context, tool, subject string) 
 	key := tool + "\x00" + subject
 
 	c.mu.Lock()
-	// YOLO/bypass and the just-approved-plan window auto-allow every approval
-	// without prompting; the plan gate routes through here too, so this is what
-	// stops a bypass session from blocking on plan approval. Deny rules bit upstream.
-	if c.bypass || c.autoApprove || c.granted[key] {
+	// YOLO/bypass and goal-loop progress auto-allow every approval without
+	// prompting. Deny rules bit upstream.
+	if c.bypass || c.goalAutoApp || c.granted[key] {
 		c.mu.Unlock()
 		return true, false, nil
 	}
@@ -1708,9 +1725,7 @@ func (c *Controller) requestApproval(ctx context.Context, tool, subject string) 
 
 	select {
 	case r := <-reply:
-		// Plan approvals are one-shot — never persist a session grant for them, or
-		// every future plan would auto-approve.
-		if r.allow && r.session && tool != planApprovalTool {
+		if r.allow && r.session {
 			c.mu.Lock()
 			c.granted[key] = true
 			c.mu.Unlock()

@@ -22,7 +22,6 @@ First stable release.
   (`codegraph_*` tools) — no embedding service or API cost. Fetched into a
   local cache on first use (or `roach-code codegraph install`) and indexed in
   the background, so installs and startup stay fast.
-- **Plan mode** with evidence-backed step sign-off (`complete_step`).
 - **Memory**: `ROACH-CODE.md` hierarchy + auto-memory, folded into the cache-stable
   prefix.
 - **ACP** (`roach-code acp`) and an HTTP/SSE server frontend; desktop app (Wails).

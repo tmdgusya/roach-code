@@ -72,7 +72,7 @@ type Checkpoint struct {
 
 ## Controller API (the one seam both frontends drive)
 
-Checkpoints live on `control.Controller`, beside `SetPlanMode` / `Compact` /
+Checkpoints live on `control.Controller`, beside `Compact` /
 `NewSession`, so the terminal TUI, the desktop webview, and the HTTP/SSE server
 drive rewind identically and none re-implement it.
 

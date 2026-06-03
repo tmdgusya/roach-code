@@ -38,13 +38,16 @@ func TestRunStatuslineDisabled(t *testing.T) {
 	}
 }
 
-func TestIdleStatuslineIsCompact(t *testing.T) {
+func TestIdleStatuslineContainsModeAndReady(t *testing.T) {
 	i18n.DetectLanguage("en")
 
 	content := renderStatuslineView(t, false)
 	plain := bottomStatusPlain(content)
-	if !strings.Contains(plain, "Auto · ready") {
-		t.Fatalf("idle status line missing mode status:\n%s", plain)
+	if !strings.Contains(plain, "Auto") {
+		t.Fatalf("idle status line missing Auto mode:\n%s", plain)
+	}
+	if !strings.Contains(plain, "ready") {
+		t.Fatalf("idle status line missing ready state:\n%s", plain)
 	}
 	for _, old := range []string{"Shift-Tab", "Ctrl-O", "Ctrl-D", "Enter sends", "Esc clears/exits state", "PgUp/PgDn"} {
 		if strings.Contains(plain, old) {
@@ -59,29 +62,24 @@ func TestIdleStatuslineIsCompact(t *testing.T) {
 func TestYoloStatuslineUsesDangerPill(t *testing.T) {
 	i18n.DetectLanguage("en")
 
+	// With colour enabled, YOLO wears the solid danger-red pill.
+	defer func(prev bool) { colorEnabled = prev }(colorEnabled)
+	colorEnabled = true
 	content := renderStatuslineView(t, true)
 	plain := bottomStatusPlain(content)
 	if !strings.Contains(plain, "YOLO") || !strings.Contains(plain, "approvals skipped") {
 		t.Fatalf("YOLO status line missing warning text:\n%s", plain)
 	}
-	if strings.Contains(plain, "[YOLO]") {
-		t.Fatalf("YOLO status line should use a pill label, not bracketed tag:\n%s", plain)
-	}
 	if !strings.Contains(content, "\x1b[48;2;229;72;77m") {
 		t.Fatalf("YOLO status line should use desktop danger red background, got:\n%q", content)
 	}
-}
 
-func TestPlanStatuslineUsesBluePill(t *testing.T) {
-	i18n.DetectLanguage("en")
-
-	content := renderPlanStatuslineView(t)
-	plain := bottomStatusPlain(content)
-	if !strings.Contains(plain, "Plan") || !strings.Contains(plain, "ready") {
-		t.Fatalf("plan status line missing mode status:\n%s", plain)
-	}
-	if !strings.Contains(content, "\x1b[48;2;37;99;235m") {
-		t.Fatalf("Plan status line should use blue background, got:\n%q", content)
+	// Under NO_COLOR / a non-tty the red field is gone, so YOLO must still shout in
+	// text — skip-all-approvals can never read as a quiet, unemphasised word.
+	colorEnabled = false
+	plain = bottomStatusPlain(renderStatuslineView(t, true))
+	if !strings.Contains(plain, "[!YOLO]") {
+		t.Fatalf("NO_COLOR YOLO should fall back to a text amplifier:\n%s", plain)
 	}
 }
 
@@ -95,16 +93,22 @@ func TestStatuslineShowsEffort(t *testing.T) {
 	}
 }
 
-func TestStatuslineExplicitEffortUsesBlue(t *testing.T) {
+func TestStatuslineExplicitEffortUsesAccentColor(t *testing.T) {
 	i18n.DetectLanguage("en")
+
+	defer func(prev bool) { colorEnabled = prev }(colorEnabled)
+	colorEnabled = true
+	// Re-initialise styles so the accent color registers are populated.
+	refreshCLIStyles()
 
 	content := renderStatuslineViewWithEffort(t, "max")
 	plain := bottomStatusPlain(content)
 	if !strings.Contains(plain, "effort max") {
 		t.Fatalf("status data line should show explicit effort:\n%s", plain)
 	}
-	if !strings.Contains(content, "\x1b[1;38;2;37;99;235m") {
-		t.Fatalf("explicit effort should use blue foreground, got:\n%q", content)
+	// Explicit effort uses the active theme's accent color (copper-coral #d97757 for graphite).
+	if !strings.Contains(content, "\x1b[38;2;217;119;87m") && !strings.Contains(content, "\x1b[38;5;173m") {
+		t.Fatalf("explicit effort should use graphite accent color, got:\n%q", content)
 	}
 }
 
@@ -137,16 +141,6 @@ func renderStatuslineViewWithEffort(t *testing.T, effort string) string {
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
 	m.label = "deepseek-v4-flash"
 	m.effortLevel = effort
-	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	return next.(chatTUI).View().Content
-}
-
-func renderPlanStatuslineView(t *testing.T) string {
-	t.Helper()
-
-	ctrl := control.New(control.Options{})
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
-	m.planMode = true
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	return next.(chatTUI).View().Content
 }

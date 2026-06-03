@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/textarea"
+	"github.com/charmbracelet/x/ansi"
 
 	"roach-code/internal/event"
+	"roach-code/internal/i18n"
 )
 
 // newTestChatTUI builds a chatTUI with just the pieces the streaming/commit and
@@ -47,11 +49,14 @@ func TestIngestSeparatesReasoningFromAnswer(t *testing.T) {
 	}
 
 	m.ingestEvent(event.Event{Kind: event.Text, Text: "Hello answer"}) // answer begins → block collapses
-	if len(m.transcript) != 1 || !strings.Contains(m.transcript[0], "thought for") {
+	// Collapse is non-destructive: the marker stays and the text slot is blanked
+	// (the full text is retained in m.thoughts for Ctrl+O / approval reveal), so the
+	// marker + an empty slot remain rather than the entry being spliced away.
+	if len(m.transcript) != 2 || !strings.Contains(m.transcript[0], "thought for") {
 		t.Fatalf("block should collapse to a duration summary, transcript=%v", m.transcript)
 	}
 	if strings.Contains(strings.Join(m.transcript, "\n"), "…reasoning…") {
-		t.Fatalf("collapsed reasoning text should be removed, transcript=%v", m.transcript)
+		t.Fatalf("collapsed reasoning text should be hidden, transcript=%v", m.transcript)
 	}
 	if m.pending.String() != "Hello answer" {
 		t.Errorf("answer should be live in pending, got %q", m.pending.String())
@@ -61,7 +66,7 @@ func TestIngestSeparatesReasoningFromAnswer(t *testing.T) {
 	}
 
 	m.commitPending() // turn end
-	if len(m.transcript) != 2 || !strings.Contains(m.transcript[1], "Hello") {
+	if len(m.transcript) != 3 || !strings.Contains(m.transcript[2], "Hello") {
 		t.Fatalf("answer should commit as a separate entry, transcript=%v", m.transcript)
 	}
 }
@@ -159,8 +164,50 @@ func TestFlushableMarkdownPrefixKeepsOpenFence(t *testing.T) {
 	}
 }
 
-// TestToolProgressStreamsThenCollapses proves a running tool's output streams
-// live under its card via the ⎿ connector, then collapses to a line-count
+func TestApprovalBannerClampsToWidth(t *testing.T) {
+	i18n.DetectLanguage("en")
+	m := newTestChatTUI()
+	m.width = 80
+	m.pendingApproval = &event.Approval{Tool: "bash", Subject: strings.Repeat("x", 200)}
+	plain := ansi.Strip(m.renderApprovalBanner())
+	for _, want := range []string{"1. Allow once", "2. Allow this session", "3. Deny"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("tool approval banner lost choice %q:\n%s", want, plain)
+		}
+	}
+	// The dangerous tail of a long bash command must survive truncation (middle-clip),
+	// and the gate must state the sandbox confinement so approval isn't blind.
+	if !strings.Contains(plain, "…") {
+		t.Errorf("long bash subject should be middle-clipped (head … tail):\n%s", plain)
+	}
+	if !strings.Contains(plain, "UNCONFINED") {
+		t.Errorf("a bash gate with unknown sandbox must fail safe and warn UNCONFINED:\n%s", plain)
+	}
+	for _, line := range strings.Split(plain, "\n") {
+		if w := ansi.StringWidth(line); w > m.width {
+			t.Fatalf("tool approval banner width = %d, want <= %d:\n%s", w, m.width, line)
+		}
+	}
+
+	// An enforcing sandbox is stated as such (not the red unconfined warning).
+	m.bashSandbox = bashSandboxStatus{state: "enforce"}
+	if enforce := ansi.Strip(m.renderApprovalBanner()); !strings.Contains(enforce, "sandbox: enforce") {
+		t.Errorf("an enforce sandbox must be stated on the bash gate:\n%s", enforce)
+	}
+}
+
+func TestRenderTUIBannerClampsNarrowWidth(t *testing.T) {
+	i18n.DetectLanguage("en")
+	width := 32
+	out := ansi.Strip(renderTUIBanner(strings.Repeat("model-", 20), "", width))
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if w := ansi.StringWidth(line); w > width {
+			t.Fatalf("startup banner width = %d, want <= %d:\n%s", w, width, line)
+		}
+	}
+}
+
+// live under its card via the cyber rail connector, then collapses to a line-count
 // summary when the result lands.
 func TestToolProgressStreamsThenCollapses(t *testing.T) {
 	m := newTestChatTUI()
@@ -172,8 +219,8 @@ func TestToolProgressStreamsThenCollapses(t *testing.T) {
 	if !strings.Contains(joined, "ok pkg/a") || !strings.Contains(joined, "ok pkg/b") {
 		t.Fatalf("live output should be visible while running:\n%s", joined)
 	}
-	if !strings.Contains(joined, "⎿") {
-		t.Fatalf("live output should use the ⎿ connector:\n%s", joined)
+	if !strings.Contains(joined, "│") {
+		t.Fatalf("live output should hang off the │ rail connector:\n%s", joined)
 	}
 
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "b1", Name: "bash", Output: "ok pkg/a\nok pkg/b\n"}})
@@ -196,7 +243,7 @@ func TestToolWorkingLineThenClears(t *testing.T) {
 
 	m.tickToolRunning() // one elapsed tick fills the placeholder
 	joined := strings.Join(m.transcript, "\n")
-	if !strings.Contains(joined, "⎿") || !strings.Contains(joined, "working") {
+	if !strings.Contains(joined, "│") || !strings.Contains(joined, "working") {
 		t.Fatalf("a running tool should show a 'working' progress line:\n%s", joined)
 	}
 

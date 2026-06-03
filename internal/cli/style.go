@@ -51,4 +51,13 @@ func green(s string) string   { return themeFg(activeCLITheme.success, s) }
 func red(s string) string     { return themeFg(activeCLITheme.err, s) }
 func yellow(s string) string  { return themeFg(activeCLITheme.warn, s) }
 func accent(s string) string  { return themeFg(activeCLITheme.accent, s) }
+func cyan(s string) string    { return themeFg(activeCLITheme.toolRead, s) }
+func magenta(s string) string { return themeFg(activeCLITheme.toolProc, s) }
 func reverse(s string) string { return sgr(ansiReverse, s) }
+
+func glitchMark(s string) string {
+	if !colorEnabled {
+		return s
+	}
+	return cyan("⟦") + accent(s) + magenta("⟧")
+}

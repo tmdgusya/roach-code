@@ -30,7 +30,10 @@ const (
 )
 
 var (
-	diffChromaStyle = styles.Get("github-dark")
+	// Warm syntax palette (gruvbox: browns/oranges/greens) so diff code sits in
+	// the same lamplit register as the rest of the ambient shell instead of the
+	// cool blues of github-dark. styles.Get falls back gracefully if absent.
+	diffChromaStyle = styles.Get("gruvbox")
 	diffChromaFmt   = formatters.Get("terminal256")
 	hunkRE          = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 )

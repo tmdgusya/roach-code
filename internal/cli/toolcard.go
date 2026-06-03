@@ -1,5 +1,5 @@
 // Formats a tool call as a Claude-style card line: a "● Verb(primary arg)"
-// header instead of the raw "-> name {json}", plus the "⎿" continuation gutter.
+// header instead of the raw "-> name {json}", plus the "╰─" continuation gutter.
 package cli
 
 import (
@@ -10,11 +10,32 @@ import (
 	"roach-code/internal/tool"
 )
 
-// connector is the Claude-style "⎿" gutter that ties a continuation block (tool
-// output, streamed thinking) to the header line above it.
-const connector = "  ⎿  "
+// gridIndent is the single content axis: structure (rail/gutter/dot) lives in
+// columns 0–3, and every piece of content — tool verb, answer body, reasoning,
+// tool output — begins at column 4, so the whole session hangs off one vertical
+// spine instead of a ragged set of indents.
+const gridIndent = 4
 
-// connectorBlock renders lines under the connector: the first carries the "⎿"
+// connector is the left rail that ties a continuation block (tool output) to the
+// dot above it: "  │ " puts the rail at column 2 and its text at the column-4
+// axis, so the dot and its output share one continuous vertical stroke.
+const connector = "  │ "
+
+// surfaceWrap is intentionally a NO-OP: tool / output / diff blocks are rendered
+// terminal-native, on the user's own terminal background, with only their TEXT
+// coloured. It used to paint a warm "surface" fill behind these blocks, but any
+// painted background fought the terminal — it floated as a panel of a different
+// colour from everything around it, and the whole-screen fill we added to hide that
+// caused black/grey boxes on terminals whose default background isn't our ink. We
+// keep the function (and its callers) so the panel fill can be reintroduced as a
+// deliberate, opt-in choice later, but by default it changes nothing. Diff add/remove
+// bands keep their own meaningful green/red backgrounds — those are applied in
+// diffview, not here.
+func surfaceWrap(s string, _ int) string {
+	return s
+}
+
+// connectorBlock renders lines under the connector: the first carries the rail
 // gutter, the rest align beneath it. Returns "" for no lines.
 func connectorBlock(lines []string) string {
 	if len(lines) == 0 {
@@ -152,19 +173,28 @@ func argList(v any) string {
 	return strings.Join(parts, ", ")
 }
 
-// toolCard renders the dispatch line: "  ⏺ Verb(arg)", arg clamped to width.
+// toolCard renders the dispatch line: "  ● Verb(arg)" — the dot sits at column 2
+// (structure) and the verb starts at the column-4 axis, with the tool's "  │ "
+// output rail hanging straight off the same dot. Fewer glyphs than the old "╭─ ●"
+// corner, more order.
 func toolCard(name, args string, width int) string {
-	return "  " + toolDot(name) + " " + toolHead(name, toolArg(name, args), width)
+	prefix := "  " + toolDot(name) + " "
+	reserved := len([]rune("  ● ")) // dot at col 2, verb at the col-4 axis
+	return clampStatusLine(prefix+toolHeadReserved(name, toolArg(name, args), width, reserved), width)
 }
 
 // toolHead builds "Verb(arg)" with the verb bold and the arg clamped to fit the
 // remaining width; shared by toolCard and the diff block header.
 func toolHead(name, arg string, width int) string {
+	return toolHeadReserved(name, arg, width, 4)
+}
+
+func toolHeadReserved(name, arg string, width, reserved int) string {
 	label := toolDisplayName(name)
 	head := bold(label)
 	if arg != "" {
-		avail := width - 4 - len([]rune(label)) - 2
-		head += dim("(") + clampPlain(arg, avail) + dim(")")
+		avail := width - reserved - len([]rune(label)) - 2
+		head += cyan("(") + clampPlain(arg, avail) + magenta(")")
 	}
 	return head
 }

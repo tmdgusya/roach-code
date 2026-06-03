@@ -9,14 +9,13 @@ import (
 	"roach-code/internal/tool"
 )
 
-// TestFailedCallsSurfaceError guards the bug where a failed tool call (an unknown
-// tool, e.g. a hallucinated "find", or a plan-mode-blocked writer) was reported
+// TestFailedCallsSurfaceError guards the bug where a failed tool call (for
+// example, a hallucinated "find") was reported with an empty Err and so rendered
 // with an empty Err and so rendered with a success check. A failed call must set
 // errMsg; a successful one must not.
 func TestFailedCallsSurfaceError(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "ok_tool", readOnly: true})
-	reg.Add(fakeTool{name: "writer", readOnly: false})
 	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
 
 	if o := a.executeOne(context.Background(), provider.ToolCall{Name: "ok_tool"}); o.errMsg != "" {
@@ -24,10 +23,5 @@ func TestFailedCallsSurfaceError(t *testing.T) {
 	}
 	if o := a.executeOne(context.Background(), provider.ToolCall{Name: "find"}); o.errMsg == "" {
 		t.Errorf("unknown tool should surface an errMsg (renders as failed), got %+v", o)
-	}
-
-	a.SetPlanMode(true)
-	if o := a.executeOne(context.Background(), provider.ToolCall{Name: "writer"}); o.errMsg == "" {
-		t.Errorf("plan-mode-blocked writer should surface an errMsg, got %+v", o)
 	}
 }

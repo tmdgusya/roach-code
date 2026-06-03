@@ -7,24 +7,13 @@ import (
 	"roach-code/internal/skill"
 )
 
-// PlanModeMarker is prepended to every user turn while plan mode is on. It rides
-// in the user message (not the system prompt or tools), so the cache-stable
-// prompt prefix is left untouched and the toggle costs nothing in cache hits.
-const PlanModeMarker = "[Plan mode — read-only. Explore the codebase first (read_file, ls, grep, glob, web_fetch, task are available; writers are refused by the harness), then present a LAYERED plan as your reply and stop — do not write files, edit, or run side-effecting bash. Structure the plan as a two-level markdown list so it becomes a layered task list: each PHASE is a top-level numbered list item (a coherent milestone, e.g. \"1. Add the config loader\"), and each phase's concrete, verifiable sub-steps are bullets indented beneath it (e.g. \"   - parse the TOML into Config\"). Use plain numbered list items for phases — do NOT write phases as markdown headings (##, ###) — so both levels parse. Keep phases few (about 2-6). The user will be asked to approve before any changes are made.]"
-
-// Compose applies the plan-mode marker to a turn's text when plan mode is on,
-// returning the message to actually send to the model. The frontend keeps
-// showing the raw text as the user bubble.
+// Compose folds turn-local context into the text that will be sent to the model.
+// The frontend keeps showing the raw text as the user bubble.
 func (c *Controller) Compose(text string) string {
 	c.mu.Lock()
-	plan := c.planMode
 	notes := c.pendingMemory
 	c.pendingMemory = nil
 	c.mu.Unlock()
-
-	if plan {
-		text = PlanModeMarker + "\n\n" + text
-	}
 
 	// Memory added mid-session rides the turn (never the cached system prefix),
 	// so it takes effect now without invalidating the prompt cache. It folds into
@@ -53,7 +42,7 @@ func (c *Controller) Compose(text string) string {
 
 // CustomCommand resolves a "/name args…" line against the loaded custom slash
 // commands, returning the rendered prompt to send (found=false when no command
-// matches). It does not apply the plan-mode marker — call Compose for that.
+// matches). It does not apply turn-tail context — call Compose for that.
 func (c *Controller) CustomCommand(input string) (sent string, found bool) {
 	fields := strings.Fields(input)
 	if len(fields) == 0 {
@@ -73,7 +62,7 @@ func (c *Controller) CustomCommand(input string) (sent string, found bool) {
 // matches). Invoking a skill by slash always inlines its body — the model reads
 // and follows the playbook in the main loop; a subagent skill's isolation is
 // only engaged when the model calls it via run_skill / the dedicated tool. The
-// caller applies Compose for plan-mode/memory framing.
+// caller applies Compose for memory/background-job framing.
 func (c *Controller) RunSkill(input string) (sent string, found bool) {
 	fields := strings.Fields(input)
 	if len(fields) == 0 {

@@ -24,6 +24,10 @@ type mdRenderer struct {
 	width int
 }
 
+// mdLeftMargin is the answer's left gutter — the shared column-4 content axis, so
+// the answer body lines up under the tool verbs and reasoning text.
+const mdLeftMargin = gridIndent
+
 func newMarkdownRenderer(width int) *mdRenderer {
 	if width <= 0 {
 		width = 80
@@ -54,12 +58,39 @@ func (r *mdRenderer) Render(input string) string {
 	src := []byte(input)
 	doc := r.md.Parser().Parse(text.NewReader(src))
 	var buf strings.Builder
-	r.renderBlocks(&buf, doc, src, 0)
+	// A left gutter so the answer breathes and aligns with the "  ╭─ ●" tool cards
+	// and banner, rather than jamming against the terminal edge.
+	r.renderBlocks(&buf, doc, src, mdLeftMargin)
 	out := strings.TrimRight(buf.String(), "\n")
 	if out == "" {
 		return ""
 	}
-	return out + "\n"
+	return warmBody(out) + "\n"
+}
+
+// warmBody paints the answer in the theme's warm body-text colour so it reads as
+// part of the lamplit ambient shell instead of the terminal's default (cold)
+// foreground. Inline accent/code/dim spans set their own colour and win locally;
+// the base is re-asserted after each SGR reset so text returns to warm rather
+// than to the terminal default. No-op under NO_COLOR.
+func warmBody(s string) string {
+	if !colorEnabled {
+		return s
+	}
+	base := fgSGR(activeCLITheme.text)
+	var b strings.Builder
+	for i, line := range strings.Split(s, "\n") {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		if line == "" {
+			continue
+		}
+		b.WriteString(base)
+		b.WriteString(strings.ReplaceAll(line, ansiReset, ansiReset+base))
+		b.WriteString(ansiReset)
+	}
+	return b.String()
 }
 
 // fixCJKEmphasis works around goldmark's CommonMark parser not recognising
@@ -281,7 +312,7 @@ func (r *mdRenderer) renderFenced(buf *strings.Builder, n ast.Node, src []byte, 
 		l := n.Lines().At(i)
 		line := strings.TrimRight(string(l.Value(src)), "\n")
 		buf.WriteString(prefix)
-		buf.WriteString(accent(line))
+		buf.WriteString(cyan(line)) // fenced code → seafoam, distinct from copper headings
 		buf.WriteString("\n")
 	}
 	buf.WriteString("\n")
@@ -328,11 +359,11 @@ func (r *mdRenderer) appendInline(b *strings.Builder, n ast.Node, src []byte) {
 		case *ast.CodeSpan:
 			var inner strings.Builder
 			r.appendInline(&inner, v, src)
-			b.WriteString(accent(inner.String()))
+			b.WriteString(yellow(inner.String())) // inline code → warm sand/amber
 		case *ast.Link:
 			var inner strings.Builder
 			r.appendInline(&inner, v, src)
-			b.WriteString(inner.String())
+			b.WriteString(red(inner.String())) // link text → coral
 			b.WriteString(dim(" (" + string(v.Destination) + ")"))
 		case *ast.AutoLink:
 			b.WriteString(string(v.URL(src)))
