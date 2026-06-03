@@ -17,6 +17,8 @@ package acp
 import (
 	"encoding/json"
 	"strings"
+
+	"roach-code/internal/provider"
 )
 
 // ProtocolVersion is the ACP version this agent implements. Matches main.
@@ -119,8 +121,9 @@ type SessionLoadResult struct{}
 // --- content blocks (inbound prompt) ---
 
 // ContentBlock is one piece of a prompt. The agent reads text blocks and the
-// inline text of resource blocks (embeddedContext); image/audio are accepted on
-// the wire but ignored, matching the advertised capabilities.
+// inline text of resource blocks (embeddedContext); image blocks are preserved as
+// multimodal provider parts when they carry inline base64 data. Audio is accepted
+// on the wire but ignored, matching the advertised capabilities.
 type ContentBlock struct {
 	Type     string            `json:"type"`
 	Text     string            `json:"text,omitempty"`
@@ -136,25 +139,34 @@ type ResourceContents struct {
 	Text     string `json:"text,omitempty"`
 }
 
-// FlattenPrompt extracts the user-visible prompt text out of ACP content blocks.
-// Text blocks contribute their text; resource blocks contribute their inline
-// text when present (embeddedContext). Other block kinds are dropped. Ported from
-// protocol.ts flattenPrompt.
-func FlattenPrompt(blocks []ContentBlock) string {
-	parts := make([]string, 0, len(blocks))
+// FlattenPrompt extracts user-visible prompt text and multimodal parts out of
+// ACP content blocks. Text blocks contribute their text; resource blocks
+// contribute their inline text when present (embeddedContext). Image blocks with
+// inline base64 data become provider image parts. Other block kinds are dropped.
+func FlattenPrompt(blocks []ContentBlock) (string, []provider.ContentPart) {
+	texts := make([]string, 0, len(blocks))
+	parts := make([]provider.ContentPart, 0, len(blocks))
 	for _, b := range blocks {
 		switch b.Type {
 		case "text":
 			if b.Text != "" {
-				parts = append(parts, b.Text)
+				texts = append(texts, b.Text)
 			}
 		case "resource":
 			if b.Resource != nil && b.Resource.Text != "" {
-				parts = append(parts, b.Resource.Text)
+				texts = append(texts, b.Resource.Text)
+			}
+		case "image":
+			if b.MimeType != "" && b.Data != "" {
+				parts = append(parts, provider.ContentPart{Type: "image", ImageURL: "data:" + b.MimeType + ";base64," + b.Data})
 			}
 		}
 	}
-	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+	text := strings.TrimSpace(strings.Join(texts, "\n\n"))
+	if text != "" && len(parts) > 0 {
+		parts = append([]provider.ContentPart{{Type: "text", Text: text}}, parts...)
+	}
+	return text, parts
 }
 
 // --- session/prompt ---

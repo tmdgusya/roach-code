@@ -10,6 +10,7 @@ import (
 
 	"roach-code/internal/control"
 	"roach-code/internal/event"
+	"roach-code/internal/provider"
 )
 
 // --- fakes: a Factory wrapping a behavior-driven runner in a real Controller ---
@@ -17,22 +18,31 @@ import (
 // fakeRunner stands in for an agent.Runner; it emits to the session's sink and
 // honors ctx cancellation, but runs no model.
 type fakeRunner struct {
-	sink     event.Sink
-	behavior func(ctx context.Context, sink event.Sink, input string) error
+	sink        event.Sink
+	behavior    func(ctx context.Context, sink event.Sink, input string) error
+	msgBehavior func(ctx context.Context, sink event.Sink, msg provider.Message) error
 }
 
 func (r *fakeRunner) Run(ctx context.Context, input string) error {
-	return r.behavior(ctx, r.sink, input)
+	return r.RunMessage(ctx, provider.Message{Role: provider.RoleUser, Content: input})
+}
+
+func (r *fakeRunner) RunMessage(ctx context.Context, msg provider.Message) error {
+	if r.msgBehavior != nil {
+		return r.msgBehavior(ctx, r.sink, msg)
+	}
+	return r.behavior(ctx, r.sink, msg.Content)
 }
 
 // fakeFactory builds a real control.Controller around the fake runner, so the
 // service exercises the actual controller surface (Run/Cancel/Close) it uses.
 type fakeFactory struct {
-	behavior func(ctx context.Context, sink event.Sink, input string) error
+	behavior    func(ctx context.Context, sink event.Sink, input string) error
+	msgBehavior func(ctx context.Context, sink event.Sink, msg provider.Message) error
 }
 
 func (f *fakeFactory) NewSession(_ context.Context, p SessionParams) (*control.Controller, error) {
-	runner := &fakeRunner{sink: p.Sink, behavior: f.behavior}
+	runner := &fakeRunner{sink: p.Sink, behavior: f.behavior, msgBehavior: f.msgBehavior}
 	return control.New(control.Options{Runner: runner, Sink: p.Sink}), nil
 }
 
@@ -209,8 +219,8 @@ func TestServeLifecycle(t *testing.T) {
 	if !ir.AgentCapabilities.PromptCapabilities.EmbeddedContext {
 		t.Errorf("embeddedContext should be advertised")
 	}
-	if ir.AgentCapabilities.PromptCapabilities.Image {
-		t.Errorf("image must not be advertised")
+	if !ir.AgentCapabilities.PromptCapabilities.Image {
+		t.Errorf("image should be advertised")
 	}
 
 	newResp := client.call(t, "session/new", SessionNewParams{Cwd: "/tmp"})
@@ -240,6 +250,47 @@ func TestServeLifecycle(t *testing.T) {
 	}
 	if pr.StopReason != StopEndTurn {
 		t.Errorf("stopReason = %q, want %q", pr.StopReason, StopEndTurn)
+	}
+}
+
+func TestServePromptPassesImagePartsToRunner(t *testing.T) {
+	got := make(chan provider.Message, 1)
+	factory := &fakeFactory{msgBehavior: func(_ context.Context, _ event.Sink, msg provider.Message) error {
+		got <- msg
+		return nil
+	}}
+	client, stop := startServer(t, factory)
+	defer stop()
+
+	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
+	newResp := client.call(t, "session/new", SessionNewParams{})
+	var nr SessionNewResult
+	if err := json.Unmarshal(newResp.Result, &nr); err != nil || nr.SessionID == "" {
+		t.Fatalf("session/new result: %v (%q)", err, nr.SessionID)
+	}
+
+	promptCh := client.callAsync("session/prompt", SessionPromptParams{
+		SessionID: nr.SessionID,
+		Prompt: []ContentBlock{
+			{Type: "image", MimeType: "image/png", Data: "AAA"},
+			{Type: "text", Text: "describe this"},
+		},
+	})
+	resp := <-promptCh
+	if resp.Error != nil {
+		t.Fatalf("session/prompt error: %+v", resp.Error)
+	}
+
+	select {
+	case msg := <-got:
+		if msg.Content != "describe this" {
+			t.Fatalf("content = %q, want describe this", msg.Content)
+		}
+		if len(msg.Parts) != 2 || msg.Parts[0].Type != "text" || msg.Parts[0].Text != "describe this" || msg.Parts[1].Type != "image" || msg.Parts[1].ImageURL != "data:image/png;base64,AAA" {
+			t.Fatalf("parts = %+v, want text + image", msg.Parts)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("runner never received prompt")
 	}
 }
 

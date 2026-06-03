@@ -247,8 +247,8 @@ func (m *chatTUI) notice(note string) {
 // controller, delivering a refsResolvedMsg with the tagged context block.
 func (m *chatTUI) resolveRefs(sent, display, restore string) tea.Cmd {
 	return func() tea.Msg {
-		block, errs := m.ctrl.ResolveRefs(context.Background(), sent)
-		return refsResolvedMsg{sent: sent, display: display, restore: restore, block: block, errs: errs}
+		msg, errs := m.ctrl.ResolveRefMessage(context.Background(), sent)
+		return refsResolvedMsg{msg: msg, display: display, restore: restore, errs: errs}
 	}
 }
 

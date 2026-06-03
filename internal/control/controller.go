@@ -143,6 +143,10 @@ type Controller struct {
 	goalAutoApp bool
 }
 
+type messageRunner interface {
+	RunMessage(context.Context, provider.Message) error
+}
+
 type approvalReply struct {
 	allow   bool
 	session bool
@@ -310,6 +314,10 @@ func (c *Controller) SendWithRaw(input, raw string) {
 	c.runGuarded(func(ctx context.Context) error { return c.runTurnWithRaw(ctx, input, raw) })
 }
 
+func (c *Controller) SendMessageWithRaw(msg provider.Message, raw string) {
+	c.runGuarded(func(ctx context.Context) error { return c.runMessageWithRaw(ctx, msg, raw) })
+}
+
 // goalContinuationFmt is the tail-appended re-prompt the goal loop sends when the
 // condition isn't met yet. It is a RAW user message (the runner appends it to the
 // and the re-run turn rides a near-full cache hit. First %s = the goal condition;
@@ -351,13 +359,29 @@ func (c *Controller) runTurn(ctx context.Context, input string) error {
 }
 
 func (c *Controller) runTurnWithRaw(ctx context.Context, input, _ string) error {
+	return c.runMessageWithRaw(ctx, provider.Message{Role: provider.RoleUser, Content: input}, input)
+}
+
+func ensureLeadingTextPart(msg *provider.Message) {
+	if msg.Content == "" || len(msg.Parts) == 0 {
+		return
+	}
+	if msg.Parts[0].Type == "text" {
+		msg.Parts[0].Text = msg.Content
+		return
+	}
+	msg.Parts = append([]provider.ContentPart{{Type: "text", Text: msg.Content}}, msg.Parts...)
+}
+
+func (c *Controller) runMessageWithRaw(ctx context.Context, msg provider.Message, _ string) error {
 	c.maybeSessionStart(ctx)
-	input = c.Compose(input)
+	msg.Content = c.Compose(msg.Content)
+	ensureLeadingTextPart(&msg)
 	startMessages := c.messageCount()
 	defer c.snapshotActivityIfChanged(startMessages)
 	// Open a checkpoint for this turn before the user message is appended, so the
 	// recorded message boundary precedes it and pre-edit snapshots land here.
-	c.beginCheckpoint(input)
+	c.beginCheckpoint(msg.Content)
 	// UserPromptSubmit / Stop hooks bracket the whole turn (incl. the plan
 	// research + approved-execution sub-turns below): a gating UserPromptSubmit
 	// aborts before any model call; Stop fires once when the turn returns.
@@ -366,12 +390,16 @@ func (c *Controller) runTurnWithRaw(ctx context.Context, input, _ string) error 
 		c.turn++
 		turn := c.turn
 		c.mu.Unlock()
-		if block, _ := c.hooks.PromptSubmit(ctx, input, turn); block {
+		if block, _ := c.hooks.PromptSubmit(ctx, msg.Content, turn); block {
 			return nil // the hook's notify callback already surfaced the reason
 		}
 		defer func() { c.hooks.Stop(ctx, lastAssistantText(c.History()), turn) }()
 	}
-	if err := c.runner.Run(ctx, input); err != nil {
+	if mr, ok := c.runner.(messageRunner); ok {
+		if err := mr.RunMessage(ctx, msg); err != nil {
+			return err
+		}
+	} else if err := c.runner.Run(ctx, msg.Content); err != nil {
 		return err
 	}
 	return c.runGoalLoop(ctx)
@@ -688,15 +716,11 @@ func (c *Controller) Submit(input string) {
 // turn with it prepended (or the raw line when nothing resolved).
 func (c *Controller) runRefTurn(input string) {
 	c.runGuarded(func(ctx context.Context) error {
-		block, errs := c.ResolveRefs(ctx, input)
+		msg, errs := c.ResolveRefMessage(ctx, input)
 		for _, e := range errs {
 			c.notice(e)
 		}
-		sent := input
-		if block != "" {
-			sent = "Referenced context:\n\n" + block + "\n\n" + input
-		}
-		return c.runTurnWithRaw(ctx, sent, input)
+		return c.runMessageWithRaw(ctx, msg, input)
 	})
 }
 
@@ -709,17 +733,26 @@ func (c *Controller) notice(text string) {
 // headless `roach-code run` path, where the Sink renders to stdout and the caller
 // just needs the exit status — no TurnDone event, no cancel bookkeeping.
 func (c *Controller) Run(ctx context.Context, input string) error {
+	return c.RunMessage(ctx, provider.Message{Role: provider.RoleUser, Content: input})
+}
+
+// RunMessage executes a possibly multimodal turn synchronously. Content remains
+// the text fallback/display string; Parts carries images for vision-capable
+// providers.
+func (c *Controller) RunMessage(ctx context.Context, msg provider.Message) error {
 	c.maybeSessionStart(ctx)
+	msg.Content = c.Compose(msg.Content)
+	ensureLeadingTextPart(&msg)
 	startMessages := c.messageCount()
 	defer c.snapshotActivityIfChanged(startMessages)
 	if c.hooks.Enabled() {
 		c.turn++
-		if block, _ := c.hooks.PromptSubmit(ctx, input, c.turn); block {
+		if block, _ := c.hooks.PromptSubmit(ctx, msg.Content, c.turn); block {
 			return nil
 		}
 		defer func() { c.hooks.Stop(ctx, lastAssistantText(c.History()), c.turn) }()
 	}
-	return c.runner.Run(ctx, input)
+	return c.runner.RunMessage(ctx, msg)
 }
 
 // Cancel aborts the in-flight turn. A goroutine blocked awaiting approval

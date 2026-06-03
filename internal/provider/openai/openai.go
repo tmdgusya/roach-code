@@ -220,7 +220,7 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 		// still keeps it (for display/archive); we just don't pay to re-upload it.
 		cm := chatMessage{
 			Role:       string(m.Role),
-			Content:    m.Content,
+			Content:    chatContent(m),
 			ToolCallID: m.ToolCallID,
 			Name:       m.Name,
 		}
@@ -258,6 +258,29 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 		out.Thinking = &thinkingMode{Type: "enabled"}
 	}
 	return out
+}
+
+func chatContent(m provider.Message) any {
+	if len(m.Parts) == 0 {
+		return m.Content
+	}
+	parts := make([]chatContentPart, 0, len(m.Parts))
+	for _, p := range m.Parts {
+		switch p.Type {
+		case "text":
+			if p.Text != "" {
+				parts = append(parts, chatContentPart{Type: "text", Text: p.Text})
+			}
+		case "image":
+			if p.ImageURL != "" {
+				parts = append(parts, chatContentPart{Type: "image_url", ImageURL: &chatImageURL{URL: p.ImageURL}})
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return m.Content
+	}
+	return parts
 }
 
 // readStream parses the SSE stream, emits text deltas live, accumulates tool-call
@@ -445,12 +468,22 @@ type chatMessage struct {
 	// `content`"). An empty string satisfies presence and is accepted by every
 	// OpenAI-compatible backend for all roles (unlike null, which some reject
 	// for a tool message).
-	Content    string         `json:"content"`
+	Content    any            `json:"content"`
 	ToolCalls  []chatToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
 	Name       string         `json:"name,omitempty"`
 	// no reasoning_content field: it is a response-only signal and is never sent
 	// back upstream — re-uploading it is paid prompt input.
+}
+
+type chatContentPart struct {
+	Type     string        `json:"type"`
+	Text     string        `json:"text,omitempty"`
+	ImageURL *chatImageURL `json:"image_url,omitempty"`
+}
+
+type chatImageURL struct {
+	URL string `json:"url"`
 }
 
 type chatTool struct {

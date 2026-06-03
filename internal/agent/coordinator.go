@@ -14,6 +14,7 @@ import (
 // (two-model) satisfy it, so the CLI stays agnostic to which is in use.
 type Runner interface {
 	Run(ctx context.Context, input string) error
+	RunMessage(ctx context.Context, msg provider.Message) error
 }
 
 // DefaultPlannerPrompt steers the planner toward concise plans, not execution.
@@ -55,14 +56,33 @@ func NewCoordinator(planner provider.Provider, plannerSession *Session, plannerP
 
 // Run plans with the planner model, then hands the plan to the executor.
 func (c *Coordinator) Run(ctx context.Context, input string) error {
+	return c.RunMessage(ctx, provider.Message{Role: provider.RoleUser, Content: input})
+}
+
+// RunMessage plans over the text fallback, then hands the original multimodal
+// parts to the executor so pasted images still reach a vision-capable model.
+func (c *Coordinator) RunMessage(ctx context.Context, msg provider.Message) error {
 	c.sink.Emit(event.Event{Kind: event.TurnStarted})
 	c.sink.Emit(event.Event{Kind: event.Phase, Text: c.planner.Name() + " · planning"})
-	plan, err := c.plan(ctx, input)
+	plan, err := c.plan(ctx, msg.Content)
 	if err != nil {
 		return fmt.Errorf("planner: %w", err)
 	}
 	c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.prov.Name() + " · executing"})
-	return c.executor.Run(ctx, formatHandoff(input, plan))
+	msg.Content = formatHandoff(msg.Content, plan)
+	ensureCoordinatorTextPart(&msg)
+	return c.executor.RunMessage(ctx, msg)
+}
+
+func ensureCoordinatorTextPart(msg *provider.Message) {
+	if msg.Content == "" || len(msg.Parts) == 0 {
+		return
+	}
+	if msg.Parts[0].Type == "text" {
+		msg.Parts[0].Text = msg.Content
+		return
+	}
+	msg.Parts = append([]provider.ContentPart{{Type: "text", Text: msg.Content}}, msg.Parts...)
 }
 
 // plan streams a plan from the planner (no tools) and appends it to the planner

@@ -78,6 +78,35 @@ func TestBuildRequestMapping(t *testing.T) {
 	}
 }
 
+func TestBuildRequestMapsUserImageParts(t *testing.T) {
+	c := &client{model: "gpt-5-codex"}
+	req := c.buildRequest(provider.Request{Messages: []provider.Message{{
+		Role:    provider.RoleUser,
+		Content: "describe this image",
+		Parts: []provider.ContentPart{
+			{Type: "text", Text: "describe this image"},
+			{Type: "image", ImageURL: "data:image/png;base64,AAA"},
+		},
+	}}})
+
+	if len(req.Input) != 1 {
+		t.Fatalf("input items = %d, want 1", len(req.Input))
+	}
+	um, ok := req.Input[0].(respMessageItem)
+	if !ok {
+		t.Fatalf("user item type = %T", req.Input[0])
+	}
+	if len(um.Content) != 2 {
+		t.Fatalf("content parts = %+v, want text + image", um.Content)
+	}
+	if um.Content[0].Type != "input_text" || um.Content[0].Text != "describe this image" {
+		t.Errorf("text part = %+v", um.Content[0])
+	}
+	if um.Content[1].Type != "input_image" || um.Content[1].ImageURL != "data:image/png;base64,AAA" {
+		t.Errorf("image part = %+v", um.Content[1])
+	}
+}
+
 // TestBuildRequestToolCallRoundTrip is the highest-risk path: a multi-tool
 // assistant turn followed by results must survive SanitizeToolPairing and map
 // to function_call / function_call_output items whose call_ids match, so the

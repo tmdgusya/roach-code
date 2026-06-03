@@ -230,7 +230,7 @@ func (c *client) buildRequest(req provider.Request) respRequest {
 			input = append(input, respMessageItem{
 				Type:    "message",
 				Role:    "user",
-				Content: []respContent{{Type: "input_text", Text: m.Content}},
+				Content: responseContentParts(m, "input_text"),
 			})
 		case provider.RoleAssistant:
 			// Replay the encrypted reasoning item (when captured) AHEAD of this
@@ -250,11 +250,11 @@ func (c *client) buildRequest(req provider.Request) respRequest {
 			// Emit visible text (if any) as a message item, then one function_call
 			// item per tool call. An assistant turn that is pure tool calls has no
 			// message item — an empty content array is rejected.
-			if m.Content != "" {
+			if m.Content != "" || len(m.Parts) > 0 {
 				input = append(input, respMessageItem{
 					Type:    "message",
 					Role:    "assistant",
-					Content: []respContent{{Type: "output_text", Text: m.Content}},
+					Content: responseContentParts(m, "output_text"),
 				})
 			}
 			for _, tc := range m.ToolCalls {
@@ -306,6 +306,32 @@ func (c *client) buildRequest(req provider.Request) respRequest {
 		out.Reasoning = &respReasoning{Effort: c.effort, Summary: "auto"}
 	}
 	return out
+}
+
+func responseContentParts(m provider.Message, textType string) []respContent {
+	if len(m.Parts) == 0 {
+		if m.Content == "" {
+			return nil
+		}
+		return []respContent{{Type: textType, Text: m.Content}}
+	}
+	parts := make([]respContent, 0, len(m.Parts))
+	for _, p := range m.Parts {
+		switch p.Type {
+		case "text":
+			if p.Text != "" {
+				parts = append(parts, respContent{Type: textType, Text: p.Text})
+			}
+		case "image":
+			if p.ImageURL != "" {
+				parts = append(parts, respContent{Type: "input_image", ImageURL: p.ImageURL})
+			}
+		}
+	}
+	if len(parts) == 0 && m.Content != "" {
+		parts = append(parts, respContent{Type: textType, Text: m.Content})
+	}
+	return parts
 }
 
 // readStream parses the Responses SSE event stream. Tool calls arrive as
@@ -499,8 +525,9 @@ type respMessageItem struct {
 }
 
 type respContent struct {
-	Type string `json:"type"` // input_text (user) | output_text (assistant)
-	Text string `json:"text"`
+	Type     string `json:"type"` // input_text | output_text | input_image
+	Text     string `json:"text,omitempty"`
+	ImageURL string `json:"image_url,omitempty"`
 }
 
 type respFunctionCall struct {

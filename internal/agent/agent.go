@@ -367,11 +367,20 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 // a round count. A positive maxSteps imposes an optional hard guard, surfaced as
 // a resumable notice when hit.
 func (a *Agent) Run(ctx context.Context, input string) error {
+	return a.RunMessage(ctx, provider.Message{Role: provider.RoleUser, Content: input})
+}
+
+// RunMessage is Run's multimodal variant. Content remains the visible/text
+// fallback; Parts may carry image attachments for providers with vision support.
+func (a *Agent) RunMessage(ctx context.Context, msg provider.Message) error {
+	if msg.Role == "" {
+		msg.Role = provider.RoleUser
+	}
 	if a.evidence != nil {
 		a.evidence.Reset()
 	}
 	a.sink.Emit(event.Event{Kind: event.TurnStarted})
-	a.session.Add(provider.Message{Role: provider.RoleUser, Content: input})
+	a.session.Add(msg)
 
 	for step := 0; a.maxSteps <= 0 || step < a.maxSteps; step++ {
 		text, reasoning, signature, calls, usage, err := a.stream(ctx, step+1)

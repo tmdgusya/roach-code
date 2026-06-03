@@ -13,6 +13,7 @@ import (
 	"roach-code/internal/control"
 	"roach-code/internal/event"
 	"roach-code/internal/plugin"
+	"roach-code/internal/provider"
 )
 
 // SessionParams is everything a Factory needs to assemble one ACP session's
@@ -112,15 +113,15 @@ func (s *acpSession) abort() {
 
 // initialize advertises the agent's capability set: sessions can be resumed via
 // session/load (transcripts are keyed by session id under the session dir),
-// prompts carry inline resource text (embeddedContext) but not image/audio, and
-// MCP is stdio-only (no http/sse) — the latter three matching main.
+// prompts carry inline resource text (embeddedContext) and image blocks, but not
+// audio, and MCP is stdio-only (no http/sse) — the latter matching main.
 func (s *service) initialize(_ context.Context, _ json.RawMessage) (any, error) {
 	return InitializeResult{
 		ProtocolVersion: ProtocolVersion,
 		AgentCapabilities: AgentCapabilities{
 			LoadSession: true,
 			PromptCapabilities: PromptCapabilities{
-				Image:           false,
+				Image:           true,
 				Audio:           false,
 				EmbeddedContext: true,
 			},
@@ -249,14 +250,14 @@ func (s *service) sessionPrompt(ctx context.Context, raw json.RawMessage) (any, 
 	if sess == nil {
 		return nil, &RPCError{Code: ErrInvalidParams, Message: "session/prompt: unknown session " + p.SessionID}
 	}
-	text := FlattenPrompt(p.Prompt)
-	if text == "" {
+	text, parts := FlattenPrompt(p.Prompt)
+	if text == "" && len(parts) == 0 {
 		return nil, &RPCError{Code: ErrInvalidParams, Message: "session/prompt: empty prompt"}
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
 	sess.setCancel(cancel)
-	runErr := sess.ctrl.Run(runCtx, text)
+	runErr := sess.ctrl.RunMessage(runCtx, provider.Message{Role: provider.RoleUser, Content: text, Parts: parts})
 	sess.setCancel(nil)
 	cancel()
 

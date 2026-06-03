@@ -76,6 +76,29 @@ func TestBuildRequest(t *testing.T) {
 	}
 }
 
+func TestBuildRequestMapsImageParts(t *testing.T) {
+	c := &client{model: "claude-opus-4-8"}
+	r := c.buildRequest(provider.Request{Messages: []provider.Message{{
+		Role:    provider.RoleUser,
+		Content: "what is this?",
+		Parts: []provider.ContentPart{
+			{Type: "text", Text: "what is this?"},
+			{Type: "image", ImageURL: "data:image/png;base64,AAA"},
+		},
+	}}})
+
+	if len(r.Messages) != 1 || len(r.Messages[0].Content) != 2 {
+		t.Fatalf("messages = %+v, want text + image", r.Messages)
+	}
+	if r.Messages[0].Content[0].Type != "text" || r.Messages[0].Content[0].Text != "what is this?" {
+		t.Fatalf("text block = %+v", r.Messages[0].Content[0])
+	}
+	img := r.Messages[0].Content[1]
+	if img.Type != "image" || img.Source == nil || img.Source.Type != "base64" || img.Source.MediaType != "image/png" || img.Source.Data != "AAA" {
+		t.Fatalf("image block = %+v", img)
+	}
+}
+
 // TestBuildRequestNoSystem checks the breakpoint falls back to the last tool when
 // there is no system message.
 func TestBuildRequestNoSystem(t *testing.T) {

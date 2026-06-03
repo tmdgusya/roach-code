@@ -70,3 +70,28 @@ func TestCoordinatorHandsPlanToExecutor(t *testing.T) {
 		t.Errorf("planner session has %d messages, want 3", n)
 	}
 }
+
+func TestEnsureCoordinatorTextPartPreservesImageOnlyParts(t *testing.T) {
+	msg := provider.Message{
+		Content: "handoff",
+		Parts:   []provider.ContentPart{{Type: "image", ImageURL: "data:image/png;base64,AAA"}},
+	}
+	ensureCoordinatorTextPart(&msg)
+	if len(msg.Parts) != 2 || msg.Parts[0].Type != "text" || msg.Parts[0].Text != "handoff" || msg.Parts[1].Type != "image" {
+		t.Fatalf("parts = %+v, want text prepended and image preserved", msg.Parts)
+	}
+}
+
+func TestEnsureCoordinatorTextPartUpdatesExistingTextPart(t *testing.T) {
+	msg := provider.Message{
+		Content: "handoff",
+		Parts: []provider.ContentPart{
+			{Type: "text", Text: "old"},
+			{Type: "image", ImageURL: "data:image/png;base64,AAA"},
+		},
+	}
+	ensureCoordinatorTextPart(&msg)
+	if len(msg.Parts) != 2 || msg.Parts[0].Text != "handoff" || msg.Parts[1].Type != "image" {
+		t.Fatalf("parts = %+v, want text updated and image preserved", msg.Parts)
+	}
+}

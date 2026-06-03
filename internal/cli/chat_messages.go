@@ -10,6 +10,7 @@ import (
 	"roach-code/internal/control"
 	"roach-code/internal/event"
 	"roach-code/internal/plugin"
+	"roach-code/internal/provider"
 	"roach-code/internal/skill"
 )
 
@@ -80,10 +81,9 @@ type promptResolvedMsg struct {
 // refsResolvedMsg carries the result of resolving the @references in a
 // submitted line (async file reads / MCP resources/read).
 type refsResolvedMsg struct {
-	sent    string
+	msg     provider.Message
 	display string
 	restore string
-	block   string
 	errs    []string
 }
 

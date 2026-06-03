@@ -23,11 +23,21 @@ const (
 	RoleTool      Role = "tool"
 )
 
+// ContentPart is one typed part of a multimodal message. Content remains the
+// plain-text fallback/display string; Parts carries image attachments to providers
+// that support vision.
+type ContentPart struct {
+	Type     string `json:"type"` // "text" | "image"
+	Text     string `json:"text,omitempty"`
+	ImageURL string `json:"image_url,omitempty"` // data URL or remote URL
+}
+
 // Message is a single conversation message.
 type Message struct {
-	Role             Role   `json:"role"`
-	Content          string `json:"content,omitempty"`
-	ReasoningContent string `json:"reasoning_content,omitempty"` // assistant: thinking-mode chain-of-thought, round-tripped on multi-turn
+	Role             Role          `json:"role"`
+	Content          string        `json:"content,omitempty"`
+	Parts            []ContentPart `json:"parts,omitempty"`
+	ReasoningContent string        `json:"reasoning_content,omitempty"` // assistant: thinking-mode chain-of-thought, round-tripped on multi-turn
 	// ReasoningSignature is an opaque, provider-issued proof that ReasoningContent
 	// is genuine model output. Anthropic requires the signed thinking block be
 	// replayed on the next turn when a tool call followed thinking; providers

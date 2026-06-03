@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -84,6 +85,102 @@ func TestClassifyRef(t *testing.T) {
 	}
 }
 
+func TestResolveRefMessageIncludesImagePart(t *testing.T) {
+	t.Chdir(t.TempDir())
+	path, err := SaveImageDataURL("data:image/png;base64," + tinyPNG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, errs := (&Controller{}).ResolveRefMessage(context.Background(), "describe @"+path)
+	if len(errs) > 0 {
+		t.Fatalf("errs = %v", errs)
+	}
+	if msg.Content != "describe [image1]" {
+		t.Fatalf("content = %q", msg.Content)
+	}
+	if len(msg.Parts) != 2 {
+		t.Fatalf("parts = %+v, want text + image", msg.Parts)
+	}
+	if msg.Parts[0].Type != "text" || msg.Parts[0].Text != msg.Content {
+		t.Errorf("text part = %+v", msg.Parts[0])
+	}
+	if msg.Parts[1].Type != "image" || !strings.HasPrefix(msg.Parts[1].ImageURL, "data:image/png;base64,") {
+		t.Errorf("image part = %+v", msg.Parts[1])
+	}
+}
+
+func TestResolveRefMessageLabelsImageWithoutPathToolBait(t *testing.T) {
+	t.Chdir(t.TempDir())
+	path, err := SaveImageDataURL("data:image/png;base64," + tinyPNG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, errs := (&Controller{}).ResolveRefMessage(context.Background(), "describe @"+path)
+	if len(errs) > 0 {
+		t.Fatalf("errs = %v", errs)
+	}
+	if strings.Contains(msg.Content, path) {
+		t.Fatalf("content = %q, must not include attachment path %q", msg.Content, path)
+	}
+	if msg.Content != "describe [image1]" {
+		t.Fatalf("content = %q, want image label", msg.Content)
+	}
+	if len(msg.Parts) != 2 {
+		t.Fatalf("parts = %+v, want text + image", msg.Parts)
+	}
+	if msg.Parts[0].Text != msg.Content {
+		t.Fatalf("text part = %q, want sanitized content %q", msg.Parts[0].Text, msg.Content)
+	}
+	if msg.Parts[1].Type != "image" || msg.Parts[1].ImageURL == "" {
+		t.Fatalf("image part = %+v, want native image data", msg.Parts[1])
+	}
+}
+
+func TestResolveRefMessageLabelsImageWhenMixedWithTextRefs(t *testing.T) {
+	t.Chdir(t.TempDir())
+	textPath := "note.txt"
+	if err := os.WriteFile(textPath, []byte("context line"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	imagePath, err := SaveImageDataURL("data:image/png;base64," + tinyPNG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, errs := (&Controller{}).ResolveRefMessage(context.Background(), "compare @"+textPath+" with @"+imagePath)
+	if len(errs) > 0 {
+		t.Fatalf("errs = %v", errs)
+	}
+	if !strings.Contains(msg.Content, "Referenced context:") || !strings.Contains(msg.Content, "context line") {
+		t.Fatalf("content = %q, want text ref context", msg.Content)
+	}
+	if strings.Contains(msg.Content, imagePath) {
+		t.Fatalf("content = %q, must not include attachment path %q", msg.Content, imagePath)
+	}
+	if !strings.Contains(msg.Content, "compare @"+textPath+" with [image1]") {
+		t.Fatalf("content = %q, want sanitized submitted line", msg.Content)
+	}
+	if len(msg.Parts) != 2 || msg.Parts[1].Type != "image" {
+		t.Fatalf("parts = %+v, want text + image", msg.Parts)
+	}
+}
+
+func TestResolveRefsDoesNotTellModelToUseOCRToolsForImageAttachments(t *testing.T) {
+	t.Chdir(t.TempDir())
+	path, err := SaveImageDataURL("data:image/png;base64," + tinyPNG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, errs := (&Controller{}).ResolveRefs(context.Background(), "describe @"+path)
+	if len(errs) > 0 {
+		t.Fatalf("errs = %v", errs)
+	}
+	for _, forbidden := range []string{"OCR", "MCP tool", "vision tool"} {
+		if strings.Contains(block, forbidden) {
+			t.Fatalf("block = %q, must not steer model toward %q", block, forbidden)
+		}
+	}
+}
+
 func TestReadFileRef(t *testing.T) {
 	dir := t.TempDir()
 
@@ -117,6 +214,12 @@ func TestReadFileRef(t *testing.T) {
 	// Image file: identified as image-specific guidance, not generic binary.
 	if got, _, err := readFileRef(imagePath); err != nil || !strings.Contains(got, "image file") {
 		t.Errorf("image file = (%q, %v), want an image note", got, err)
+	} else {
+		for _, forbidden := range []string{"OCR", "MCP", "vision tool"} {
+			if strings.Contains(got, forbidden) {
+				t.Fatalf("image file note = %q, must not steer model toward %q", got, forbidden)
+			}
+		}
 	}
 
 	// Large file: truncated with a marker.

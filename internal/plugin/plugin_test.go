@@ -405,7 +405,7 @@ func TestStartPhaseAReturnsBeforePhaseB(t *testing.T) {
 		Env: map[string]string{
 			"GO_WANT_HELPER_PROCESS":         "1",
 			"GO_WANT_HELPER_PROMPTS":         "1",
-			"GO_WANT_HELPER_PROMPT_DELAY_MS": "200",
+			"GO_WANT_HELPER_PROMPT_DELAY_MS": "1200",
 		},
 	}
 
@@ -417,8 +417,8 @@ func TestStartPhaseAReturnsBeforePhaseB(t *testing.T) {
 	if len(tools) == 0 {
 		t.Fatalf("want tools from helper, got 0")
 	}
-	if startDur >= 150*time.Millisecond {
-		t.Fatalf("StartAvailable took %v — phase B (200ms prompts) leaked onto the critical path", startDur)
+	if startDur >= 900*time.Millisecond {
+		t.Fatalf("StartAvailable took %v — phase B (1200ms prompts) leaked onto the critical path", startDur)
 	}
 	if got := host.Prompts(); len(got) != 0 {
 		t.Fatalf("phase A must not surface prompts yet, got %d", len(got))

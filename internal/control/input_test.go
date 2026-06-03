@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"roach-code/internal/command"
+	"roach-code/internal/provider"
 )
 
 type fakeTurnRunner struct {
@@ -13,7 +14,11 @@ type fakeTurnRunner struct {
 }
 
 func (f *fakeTurnRunner) Run(ctx context.Context, input string) error {
-	f.inputs = append(f.inputs, input)
+	return f.RunMessage(ctx, provider.Message{Role: provider.RoleUser, Content: input})
+}
+
+func (f *fakeTurnRunner) RunMessage(_ context.Context, msg provider.Message) error {
+	f.inputs = append(f.inputs, msg.Content)
 	return nil
 }
 
