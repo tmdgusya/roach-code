@@ -125,7 +125,7 @@ type client struct {
 	keyEnv  string
 	baseURL string
 	model   string
-	effort  string     // reasoning effort: low|medium|high; "" = provider default
+	effort  string // reasoning effort: low|medium|high; "" = provider default
 	http    *http.Client
 	cred    credential // API-key or ChatGPT-OAuth; sets auth headers per request
 }

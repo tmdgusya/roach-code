@@ -57,7 +57,7 @@ func TestGenManifest(t *testing.T) {
 		"Roach Code-windows-amd64-installer.exe",
 		"Roach Code-linux-amd64.tar.gz",
 		"Roach Code-linux-amd64.tar.gz.minisig", // must be skipped
-		"README.txt",                          // unmatched, must be skipped
+		"README.txt",                            // unmatched, must be skipped
 	}
 	for _, n := range names {
 		if err := os.WriteFile(filepath.Join(dir, n), []byte(n), 0o644); err != nil {

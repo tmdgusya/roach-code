@@ -225,9 +225,9 @@ func roachHeroShimmerRows(stops []cliColor, phase int) []string {
 		for x := 0; x < len(r); x++ {
 			fgPos := float64(x)/float64(artW)*0.6 + float64(y)/rows*0.4
 			base := gradientColorAt(fgPos, stops...)
-			d := (float64(x) + float64(y)) - center           // mild diagonal axis
-			glow := math.Exp(-(d*d)/(2*sigma*sigma)) * 0.92    // bright crest — clearly lit
-			col := mixColor(base, activeCLITheme.text, glow)   // lighten toward warm off-white
+			d := (float64(x) + float64(y)) - center          // mild diagonal axis
+			glow := math.Exp(-(d*d)/(2*sigma*sigma)) * 0.92  // bright crest — clearly lit
+			col := mixColor(base, activeCLITheme.text, glow) // lighten toward warm off-white
 			b.WriteString(fgSGR(col) + ansiBold + string(r[x]) + ansiReset)
 		}
 		out[y] = b.String()
