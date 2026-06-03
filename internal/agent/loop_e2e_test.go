@@ -101,3 +101,41 @@ func TestRunWellFormedToolLoopRoundTrips(t *testing.T) {
 		t.Errorf("repair mutated a well-formed session: %d -> %d", before, after)
 	}
 }
+
+func TestRunMessageWithImagePartDoesNotAdvertiseTools(t *testing.T) {
+	mp := testutil.NewMock("m", testutil.Turn{Text: "7429"})
+	a := New(mp, echoRegistry(), NewSession(""), Options{}, event.Discard)
+	msg := provider.Message{
+		Role:    provider.RoleUser,
+		Content: "[image1] read it",
+		Parts: []provider.ContentPart{
+			{Type: "text", Text: "[image1] read it"},
+			{Type: "image", ImageURL: "data:image/png;base64,AAAA"},
+		},
+	}
+	if err := a.RunMessage(context.Background(), msg); err != nil {
+		t.Fatalf("RunMessage: %v", err)
+	}
+	reqs := mp.Requests()
+	if len(reqs) != 1 {
+		t.Fatalf("requests = %d, want 1", len(reqs))
+	}
+	if len(reqs[0].Tools) != 0 {
+		t.Fatalf("image turn advertised %d tools, want 0", len(reqs[0].Tools))
+	}
+}
+
+func TestRunMessageTextTurnStillAdvertisesTools(t *testing.T) {
+	mp := testutil.NewMock("m", testutil.Turn{Text: "ok"})
+	a := New(mp, echoRegistry(), NewSession(""), Options{}, event.Discard)
+	if err := a.RunMessage(context.Background(), provider.Message{Role: provider.RoleUser, Content: "use a tool if needed"}); err != nil {
+		t.Fatalf("RunMessage: %v", err)
+	}
+	reqs := mp.Requests()
+	if len(reqs) != 1 {
+		t.Fatalf("requests = %d, want 1", len(reqs))
+	}
+	if len(reqs[0].Tools) == 0 {
+		t.Fatal("text turn should still advertise tools")
+	}
+}

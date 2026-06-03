@@ -74,6 +74,8 @@ interface State {
   // balance is the active provider's wallet readout, refreshed on mount and after
   // each turn; undefined until first fetched, available:false when not configured.
   balance?: BalanceInfo;
+  // effort is the active provider's reasoning-effort readout, refreshed on mount,
+  // turn end, model/settings changes, and notices from local commands like /effort.
   effort?: EffortInfo;
   // jobs are the running background jobs, refreshed on mount, turn end, and on
   // each notice (job start/finish emit notices).
@@ -474,6 +476,15 @@ export function useController() {
           .Balance()
           .then((balance) => dispatch({ type: "balance", balance }))
           .catch(() => {});
+        app
+          .Effort()
+          .then((effort) => dispatch({ type: "effort", effort }))
+          .catch(() => {});
+      }
+      // Local commands such as /effort complete by emitting a notice rather than a
+      // turn_done event, so refresh the effort chip on notices too; otherwise the
+      // status bar stays stale until the next model turn or manual refresh.
+      if (e.kind === "notice") {
         app
           .Effort()
           .then((effort) => dispatch({ type: "effort", effort }))
