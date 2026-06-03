@@ -265,8 +265,7 @@ multi_edit, bash, ls, glob, grep, web_fetch, task, todo_write, ask), TOML 설정
 `readOnlyHint` 인식), prompts(슬래시 명령), resources(`@` 참조), 그리고 `/mcp`,
 `[[plugins]]` 또는 프로젝트 `.mcp.json`으로 설정 — 사용자 정의 슬래시
 명령(`.roach-code/commands/*.md`), `@file` / `@resource` 참조, 실행 가능한 레퍼런스
-플러그인(`cmd/roach-code-plugin-example`), 하니스 루프, CLI. Wails 데스크톱
-클라이언트(`desktop/`)가 같은 커널을 구동합니다.
+플러그인(`cmd/roach-code-plugin-example`), 하니스 루프, CLI.
 
 **다음:** `bash`를 위한 OS 수준 샌드박스(macOS Seatbelt / Linux bubblewrap),
 MCP OAuth + 레거시 SSE. `docs/SPEC.md` §9 참고.

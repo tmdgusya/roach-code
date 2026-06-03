@@ -273,7 +273,7 @@ client — **stdio + Streamable HTTP** transports, tools (`mcp__server__tool`,
 and `/mcp`, configured via `[[plugins]]` or a project `.mcp.json` — custom slash
 commands (`.roach-code/commands/*.md`), `@file` / `@resource` references, plus
 a runnable reference plugin (`cmd/roach-code-plugin-example`), the harness loop,
-and CLI. A Wails desktop client (`desktop/`) drives the same kernel.
+and CLI.
 
 **Next:** an OS-level sandbox for `bash` (macOS Seatbelt / Linux bubblewrap),
 MCP OAuth + legacy SSE. See `docs/SPEC.md` §9.
