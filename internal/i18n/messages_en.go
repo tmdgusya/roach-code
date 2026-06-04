@@ -19,7 +19,7 @@ var English = Messages{
 	StepSetKey:      "set API key",
 
 	InitHint:       "Project memory (AGENTS.md) is generated in-session: run `roach-code chat`, then `/init` — the model analyzes the codebase and writes it. For configuration, use `roach-code setup`.",
-	StepSetKeyHint: "export DEEPSEEK_API_KEY=… or add to .env",
+	StepSetKeyHint: "export DEEPSEEK_API_KEY=… or add to ~/.env",
 	StepChatDesc:   "interactive session",
 	StepRunDesc:    "one-shot task",
 	HelpFooter:     "roach-code help · all commands",
@@ -175,13 +175,13 @@ var English = Messages{
 	RewindEmpty:            "(empty)",
 
 	SelectProvidersLabel:  "Select providers to enable",
-	EnterAPIKeysHeader:    "Enter API keys (Enter to skip and set later in .env):",
+	EnterAPIKeysHeader:    "Enter API keys (Enter to skip and set later in ~/.env):",
 	MissingKeyIntro:       "roach-code.toml is ready — just an API key away.",
 	WroteFileFmt:          "Wrote %s",
 	SetupComplete:         "Setup complete.",
 	SetupCancelled:        "setup cancelled.",
 	TryHintFmt:            "Try: %s",
-	NextHint:              "Next: set your API key (export DEEPSEEK_API_KEY=... or add to .env), then run `roach-code run \"your task\"`.",
+	NextHint:              "Next: set your API key (export DEEPSEEK_API_KEY=... or add to ~/.env), then run `roach-code run \"your task\"`.",
 	ConfirmReconfigureFmt: "%s already exists. Reconfigure and overwrite?",
 	KeepingExisting:       "Keeping existing config.",
 	NotOverwritingFmt:     "%s already exists; not overwriting",
@@ -231,7 +231,7 @@ var English = Messages{
 	ErrorPrefix:               "error:",
 	ReconfigureOnUnknownModel: "Configured model is no longer available — re-running setup.",
 	WriteConfigErr:            "write config:",
-	WriteEnvErr:               "write .env:",
+	WriteEnvErr:               "write ~/.env:",
 
 	SelectOneHint:  "(↑/↓ · Enter · q to cancel)",
 	SelectManyHint: "(↑/↓ · Space · Enter · q)",
@@ -242,7 +242,7 @@ Usage:
   roach-code chat [--model NAME] [-c|--continue] [--resume]   interactive session (multi-turn; -c resumes the latest, --resume picks one)
   roach-code run  [--model NAME] [--max-steps N] <task>   run one task and exit
   roach-code serve [--model NAME] [--addr HOST:PORT]      serve the session over HTTP+SSE (browser client at /)
-  roach-code setup [path]                                 interactive config wizard; writes roach-code.toml (+ .env)
+  roach-code setup [path]                                 interactive config wizard; writes roach-code.toml (+ ~/.env)
   roach-code mcp <add|remove|list>                        manage MCP servers in roach-code.toml
   roach-code codex <login|logout|status>                  sign in to Codex with a ChatGPT subscription (OAuth)
   roach-code models [refresh [provider]] [--dry-run]      list models, or refresh them from the provider's /models API

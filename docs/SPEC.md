@@ -322,8 +322,8 @@ type Chunk struct {
 
 Resolution order: **flag > project `./roach-code.toml` > user `~/.config/roach-code/config.toml`
 > built-in defaults**. Secrets come from the environment via `api_key_env` and
-are never stored in config files. A `.env` in the working directory is loaded if
-present.
+are never stored in config files. A user-global `~/.env` is loaded if present;
+project-local `.env` files are not auto-loaded.
 
 ```toml
 default_model = "deepseek"   # provider name (→ its default model) or "provider/model"

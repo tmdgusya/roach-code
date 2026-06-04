@@ -439,7 +439,7 @@ func chatREPL(args []string) int {
 }
 
 // setupConfig runs the configuration wizard (the `roach-code setup` command),
-// writing roach-code.toml (+ .env). Project memory is a separate concern — the
+// writing roach-code.toml (+ ~/.env). Project memory is a separate concern — the
 // in-session `/init` skill generates AGENTS.md (see initHint).
 func setupConfig(args []string) int {
 	path := "roach-code.toml"
@@ -490,8 +490,8 @@ func initHint() int {
 	return 0
 }
 
-// interactiveSetup runs the setup wizard, then writes roach-code.toml (plus .env for any
-// keys entered). The wizard is intentionally minimal: pick language, pick
+// interactiveSetup runs the setup wizard, then writes roach-code.toml (plus
+// ~/.env for any keys entered). The wizard is intentionally minimal: pick language, pick
 // provider, enter API keys. Language is asked first so every subsequent prompt
 // is already in the user's language even when env auto-detection got it wrong.
 // Two-model collaboration is left as a manual config edit (planner_model) so
@@ -546,12 +546,17 @@ func interactiveSetup(path string) int {
 	}
 	fmt.Printf("\n%s %s\n", green("✓"), fmt.Sprintf(i18n.M.WroteFileFmt, path))
 
+	envPath := config.GlobalDotEnvPath()
 	if len(envLines) > 0 {
-		if err := appendEnv(".env", envLines); err != nil {
+		if envPath == "" {
+			fmt.Fprintln(os.Stderr, i18n.M.WriteEnvErr, "home directory not found")
+			return 1
+		}
+		if err := appendEnv(envPath, envLines); err != nil {
 			fmt.Fprintln(os.Stderr, i18n.M.WriteEnvErr, err)
 			return 1
 		}
-		fmt.Printf("%s %s\n", green("✓"), fmt.Sprintf(i18n.M.WroteFileFmt, ".env"))
+		fmt.Printf("%s %s\n", green("✓"), fmt.Sprintf(i18n.M.WroteFileFmt, envPath))
 	}
 
 	fmt.Printf("\n%s %s\n", accent("◆"), i18n.M.SetupComplete)
@@ -858,7 +863,7 @@ func promptCustomProviderManual() ([]config.ProviderEntry, error) {
 // Pre-filled values (baseURL, keyEnv, apiKey) are reused as-is when non-empty
 // so the URL-fetch flow can fall through to manual entry without re-asking
 // the user for information they've already typed. An empty apiKey is allowed
-// — the key step happens later in the wizard and .env is updated then.
+// — the key step happens later in the wizard and ~/.env is updated then.
 func promptCustomProviderManualWith(in *bufio.Scanner, baseURL, keyEnv, apiKey string) ([]config.ProviderEntry, error) {
 	fmt.Println()
 	if baseURL == "" {
@@ -1082,10 +1087,10 @@ func withBuiltinFamilies(providers []config.ProviderEntry) []config.ProviderEntr
 
 // promptMissingKeys re-runs the wizard's key-entry step for any enabled
 // provider whose api_key_env is unset. Newly entered values are appended to
-// .env so the chat session that follows picks them up via config.Load. The
+// ~/.env so the chat session that follows picks them up via config.Load. The
 // user can hit Enter to skip — the chat banner falls back to a one-line
 // warning so they still see what's missing. Returns a non-zero exit code only
-// when writing .env fails.
+// when writing ~/.env fails.
 func promptMissingKeys(cfg *config.Config) int {
 	missing := providersWithMissingKeys(cfg)
 	if len(missing) == 0 {
@@ -1097,11 +1102,16 @@ func promptMissingKeys(cfg *config.Config) int {
 	if len(envLines) == 0 {
 		return 0
 	}
-	if err := appendEnv(".env", envLines); err != nil {
+	envPath := config.GlobalDotEnvPath()
+	if envPath == "" {
+		fmt.Fprintln(os.Stderr, i18n.M.WriteEnvErr, "home directory not found")
+		return 1
+	}
+	if err := appendEnv(envPath, envLines); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.WriteEnvErr, err)
 		return 1
 	}
-	fmt.Printf("%s %s\n", green("✓"), fmt.Sprintf(i18n.M.WroteFileFmt, ".env"))
+	fmt.Printf("%s %s\n", green("✓"), fmt.Sprintf(i18n.M.WroteFileFmt, envPath))
 	return 0
 }
 
@@ -1120,15 +1130,15 @@ func providersWithMissingKeys(cfg *config.Config) []config.ProviderEntry {
 
 // configureKeys reconciles each enabled provider's API key with the
 // environment. For every distinct api_key_env: if the variable is already
-// set — either by loadDotEnv from .env, or by an earlier wizard step that
+// set — either by loadDotEnv from ~/.env, or by an earlier wizard step that
 // called os.Setenv (the URL-fetch flow asks for the key once so it can call
 // /models) — the existing value is reused and a single-line confirmation is
 // printed so the user can see why no prompt appeared. Otherwise the user is
 // asked once per env var (deduped across providers that share one, e.g.
-// both DeepSeek models). Returns KEY=value lines to append to .env: any
+// both DeepSeek models). Returns KEY=value lines to append to ~/.env: any
 // env var that was already set in the process goes through too, so a
-// re-run of `roach-code setup` re-pins the current value into .env (a
-// loadDotEnv is first-wins, so without re-pinning, an old .env line would
+// re-run of `roach-code setup` re-pins the current value into ~/.env (a
+// loadDotEnv is first-wins, so without re-pinning, an old ~/.env line would
 // shadow the fresh value).
 func configureKeys(selected []config.ProviderEntry, r io.Reader, w io.Writer) []string {
 	in := bufio.NewScanner(r)
@@ -1152,7 +1162,7 @@ func configureKeys(selected []config.ProviderEntry, r io.Reader, w io.Writer) []
 		}
 		seen[p.APIKeyEnv] = true
 
-		// Reuse any value the wizard or .env already set. The URL-fetch
+		// Reuse any value the wizard or ~/.env already set. The URL-fetch
 		// flow (promptCustomProviderFromURL) calls os.Setenv(keyEnv, apiKey)
 		// before the /models probe; that value is the user's "real" key
 		// and we'd be wrong to discard it by asking again.
@@ -1196,7 +1206,7 @@ func isTTY(f *os.File) bool {
 	return term.IsTerminal(int(f.Fd()))
 }
 
-// appendEnv merges KEY=value lines into a .env file. Existing assignments of
+// appendEnv merges KEY=value lines into a dotenv file. Existing assignments of
 // any key that's about to be written are dropped first, then the new values
 // are appended — so re-running `roach-code setup` with a corrected key replaces the
 // stale one instead of stacking duplicates (loadDotEnv is first-wins, so a
@@ -1268,7 +1278,7 @@ func welcome(version string) int {
 		if rc := interactiveSetup("roach-code.toml"); rc != 0 {
 			return rc
 		}
-		// Config just written; reload so .env (and any pinned language) is
+		// Config just written; reload so ~/.env (and any pinned language) is
 		// picked up. If the chosen provider's key is ready, drop into chat.
 		if cfg, err := config.Load(); err == nil && cfg.Validate(cfg.DefaultModel) == nil {
 			if cfg.Language != "" {

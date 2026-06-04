@@ -16,7 +16,7 @@ func (e *ProviderEntry) FetchModels(ctx context.Context) ([]string, error) {
 	}
 	key := e.APIKey()
 	if key == "" {
-		return nil, fmt.Errorf("fetch models: provider %q has no API key (set %s in .env)", e.Name, e.APIKeyEnv)
+		return nil, fmt.Errorf("fetch models: provider %q has no API key (set %s in ~/.env)", e.Name, e.APIKeyEnv)
 	}
 	url := e.ModelsURL
 	if url == "" {

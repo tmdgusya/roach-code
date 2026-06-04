@@ -78,7 +78,7 @@ make cross      # -> dist/ (darwin|linux|windows × amd64|arm64)
 
 ```sh
 roach-code setup                      # config wizard → ./roach-code.toml
-export DEEPSEEK_API_KEY=sk-...  # or put it in .env (see .env.example)
+export DEEPSEEK_API_KEY=sk-...  # or put it in ~/.env (see .env.example)
 roach-code chat                       # then run /init to generate AGENTS.md (project memory)
 roach-code run "implement the TODOs in main.go"
 roach-code run --model mimo-pro "add unit tests for this function"
