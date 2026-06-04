@@ -197,12 +197,15 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 
 	// CodeGraph is a built-in MCP server fetched on first use. When it resolves,
 	// inject it as one more stdio plugin pinned to the project root (it is
-	// cwd-aware); EnsureInit only creates .codegraph/ (fast, size-independent),
-	// serve's daemon then indexes in the background, so startup never blocks even
-	// on a large repo. When it is not yet installed, fetch it in the background
-	// (one-time, ~45MB) if auto_install is on — startup still never blocks, the
-	// tools come online next session — otherwise point the user at the explicit
-	// install command. A failed init or fetch is a notice, not fatal.
+	// cwd-aware). InitForBoot creates .codegraph/ under a short budget and never
+	// blocks startup (or a /model switch) for more than that — a bare init is
+	// normally ~100ms, but a pathological tree (e.g. a home directory) is detached
+	// to finish in the background, and the home root itself is refused outright
+	// (issue #4). serve's daemon then indexes in the background. When codegraph is
+	// not yet installed, fetch it in the background (one-time, ~45MB) if
+	// auto_install is on — startup still never blocks, the tools come online next
+	// session — otherwise point the user at the explicit install command. A failed
+	// init or fetch is a notice, not fatal.
 	//
 	// Codegraph stays eager regardless of user tier — symbol-graph tools land
 	// in the system prompt, so the agent must see them on first turn.
@@ -210,11 +213,19 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		bin, ok := codegraph.Resolve(cfg.Codegraph.Path)
 		switch {
 		case ok:
-			if err := codegraph.EnsureInit(ctx, bin, cwd); err != nil {
+			switch status, initErr := codegraph.InitForBoot(ctx, bin, cwd, codegraph.EnsureInitBudget); status {
+			case codegraph.InitReady:
+				eagerSpecs = append(eagerSpecs, plugin.Spec{Name: "codegraph", Command: bin, Args: []string{"serve", "--mcp"}, Dir: cwd})
+			case codegraph.InitSkippedHome:
+				sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo,
+					Text: "codegraph: skipped in your home directory — open a project folder to enable symbol-graph tools"})
+			case codegraph.InitPending:
+				sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo,
+					Text: "codegraph: indexing a large tree in the background — symbol-graph tools available next session"})
+			case codegraph.InitFailed:
 				sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn,
-					Text: "codegraph: init failed (" + err.Error() + ") — symbol-graph tools disabled this session"})
+					Text: "codegraph: init failed (" + initErr.Error() + ") — symbol-graph tools disabled this session"})
 			}
-			eagerSpecs = append(eagerSpecs, plugin.Spec{Name: "codegraph", Command: bin, Args: []string{"serve", "--mcp"}, Dir: cwd})
 		case cfg.Codegraph.AutoInstall:
 			notify := func(msg string) { sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: msg}) }
 			notify("codegraph: fetching code-intelligence runtime in the background (one-time) — symbol-graph tools available next session")
