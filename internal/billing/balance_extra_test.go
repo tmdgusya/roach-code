@@ -29,8 +29,26 @@ func TestSymbolUSD(t *testing.T) {
 }
 
 func TestSymbolUnknown(t *testing.T) {
-	if got := symbol("EUR"); got != "EUR " {
-		t.Errorf("symbol(EUR) = %q, want \"EUR \"", got)
+	if got := symbol("AUD"); got != "AUD " {
+		t.Errorf("symbol(AUD) = %q, want \"AUD \"", got)
+	}
+}
+
+func TestSymbolKRW(t *testing.T) {
+	if got := symbol("KRW"); got != "₩" {
+		t.Errorf("symbol(KRW) = %q", got)
+	}
+}
+
+func TestSymbolEUR(t *testing.T) {
+	if got := symbol("EUR"); got != "€" {
+		t.Errorf("symbol(EUR) = %q", got)
+	}
+}
+
+func TestSymbolGBP(t *testing.T) {
+	if got := symbol("GBP"); got != "£" {
+		t.Errorf("symbol(GBP) = %q", got)
 	}
 }
 
@@ -63,22 +81,22 @@ func TestDisplayEmptyInfos(t *testing.T) {
 	}
 }
 
-func TestDisplayPrefersCNY(t *testing.T) {
+func TestDisplayPrefersUSD(t *testing.T) {
 	b := &Balance{Infos: []Info{
-		{Currency: "USD", TotalBalance: "10.00"},
 		{Currency: "CNY", TotalBalance: "50.00"},
+		{Currency: "USD", TotalBalance: "10.00"},
 	}}
-	if got := b.Display(); got != "¥50.00" {
-		t.Errorf("Display = %q, want ¥50.00", got)
+	if got := b.Display(); got != "$10.00" {
+		t.Errorf("Display = %q, want $10.00", got)
 	}
 }
 
 func TestDisplayFallsBackToFirst(t *testing.T) {
 	b := &Balance{Infos: []Info{
-		{Currency: "EUR", TotalBalance: "25.00"},
+		{Currency: "AUD", TotalBalance: "25.00"},
 	}}
-	if got := b.Display(); got != "EUR 25.00" {
-		t.Errorf("Display = %q, want \"EUR 25.00\"", got)
+	if got := b.Display(); got != "AUD 25.00" {
+		t.Errorf("Display = %q, want \"AUD 25.00\"", got)
 	}
 }
 
@@ -141,5 +159,64 @@ func TestFetchServerUnavailable(t *testing.T) {
 	_, err := Fetch(context.Background(), "http://127.0.0.1:1", "key")
 	if err == nil {
 		t.Fatal("expected error for unavailable server")
+	}
+}
+
+// --- DisplayFor ---
+
+func TestDisplayForKRW(t *testing.T) {
+	b := &Balance{Infos: []Info{
+		{Currency: "USD", TotalBalance: "10.00"},
+		{Currency: "KRW", TotalBalance: "13000"},
+	}}
+	if got := b.DisplayFor("KRW"); got != "₩13000" {
+		t.Errorf("DisplayFor(KRW) = %q, want ₩13000", got)
+	}
+}
+
+func TestDisplayForCNY(t *testing.T) {
+	b := &Balance{Infos: []Info{
+		{Currency: "USD", TotalBalance: "10.00"},
+		{Currency: "CNY", TotalBalance: "72.50"},
+	}}
+	if got := b.DisplayFor("CNY"); got != "¥72.50" {
+		t.Errorf("DisplayFor(CNY) = %q, want ¥72.50", got)
+	}
+}
+
+func TestDisplayForFallback(t *testing.T) {
+	b := &Balance{Infos: []Info{
+		{Currency: "USD", TotalBalance: "10.00"},
+	}}
+	// Requesting an unavailable currency falls back to the default Display (USD).
+	if got := b.DisplayFor("KRW"); got != "$10.00" {
+		t.Errorf("DisplayFor(KRW) = %q, want $10.00 (fallback)", got)
+	}
+}
+
+func TestDisplayForEmpty(t *testing.T) {
+	b := &Balance{Infos: []Info{
+		{Currency: "USD", TotalBalance: "10.00"},
+	}}
+	// Empty currency uses the default Display.
+	if got := b.DisplayFor(""); got != "$10.00" {
+		t.Errorf("DisplayFor(\"\") = %q, want $10.00", got)
+	}
+}
+
+func TestDisplayForNil(t *testing.T) {
+	var b *Balance
+	if got := b.DisplayFor("USD"); got != "" {
+		t.Errorf("nil DisplayFor = %q", got)
+	}
+}
+
+func TestDisplayCNYOnly(t *testing.T) {
+	b := &Balance{Infos: []Info{
+		{Currency: "CNY", TotalBalance: "110.00"},
+	}}
+	// When only CNY is available, Display shows CNY.
+	if got := b.Display(); got != "¥110.00" {
+		t.Errorf("Display = %q, want ¥110.00", got)
 	}
 }

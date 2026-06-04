@@ -159,12 +159,12 @@ func matchGlobSuffix(path, pattern string) bool {
 	if matched, _ := filepath.Match(pattern, path); matched {
 		return true
 	}
-	// Try matching at each directory level.
-	parts := strings.Split(path, string(os.PathSeparator))
-	for i := range parts {
-		sub := strings.Join(parts[i:], string(os.PathSeparator))
-		if matched, _ := filepath.Match(pattern, sub); matched {
-			return true
+	// Try matching at each directory level without allocating substrings.
+	for i := 0; i < len(path); i++ {
+		if path[i] == os.PathSeparator {
+			if matched, _ := filepath.Match(pattern, path[i+1:]); matched {
+				return true
+			}
 		}
 	}
 	// Also try matching just the filename against the pattern (for patterns

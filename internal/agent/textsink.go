@@ -217,6 +217,11 @@ func dimText(s string) string { return "\x1b[2m" + s + "\x1b[0m" }
 // Exported so the CLI can reuse the same rendering without duplicating the logic.
 func CompactArgs(s string) string {
 	s = strings.TrimSpace(s)
+	// Fast path: if the byte length is within the limit, the rune count is too
+	// (each rune is at least 1 byte). Skip the []rune allocation for short args.
+	if len(s) <= 120 {
+		return s
+	}
 	r := []rune(s)
 	if len(r) > 120 {
 		return string(r[:120]) + "..."

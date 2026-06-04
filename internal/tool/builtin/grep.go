@@ -70,7 +70,7 @@ func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 		return "", fmt.Errorf("invalid pattern: %w", err)
 	}
 
-	var out []string
+	out := make([]string, 0, grepMaxMatches)
 	truncated := false
 
 	// searchFile returns io.EOF as a sentinel once the cap is reached.
@@ -211,7 +211,7 @@ func (g grepTool) runRipgrep(ctx context.Context, pattern, path string) (string,
 		return "", fmt.Errorf("ripgrep: %w", err)
 	}
 
-	var out []string
+	out := make([]string, 0, grepMaxMatches)
 	truncated := false
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)

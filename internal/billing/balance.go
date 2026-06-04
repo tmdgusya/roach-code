@@ -103,6 +103,14 @@ func symbol(currency string) string {
 		return "¥"
 	case "USD":
 		return "$"
+	case "KRW":
+		return "₩"
+	case "JPY":
+		return "¥"
+	case "EUR":
+		return "€"
+	case "GBP":
+		return "£"
 	default:
 		if currency == "" {
 			return ""
@@ -111,7 +119,7 @@ func symbol(currency string) string {
 	}
 }
 
-// Display renders the primary balance compactly, e.g. "¥110.00". It prefers CNY,
+// Display renders the primary balance compactly, e.g. "$9.99". It prefers USD,
 // then the first currency reported. "" when there's nothing to show.
 func (b *Balance) Display() string {
 	if b == nil || len(b.Infos) == 0 {
@@ -119,10 +127,27 @@ func (b *Balance) Display() string {
 	}
 	pick := b.Infos[0]
 	for _, i := range b.Infos {
-		if strings.EqualFold(i.Currency, "CNY") {
+		if strings.EqualFold(i.Currency, "USD") {
 			pick = i
 			break
 		}
 	}
 	return symbol(pick.Currency) + strings.TrimSpace(pick.TotalBalance)
+}
+
+// DisplayFor renders the balance in the requested currency. Falls back to the
+// default Display when the requested currency isn't available.
+func (b *Balance) DisplayFor(currency string) string {
+	if b == nil || len(b.Infos) == 0 {
+		return ""
+	}
+	if currency == "" {
+		return b.Display()
+	}
+	for _, i := range b.Infos {
+		if strings.EqualFold(i.Currency, currency) {
+			return symbol(i.Currency) + strings.TrimSpace(i.TotalBalance)
+		}
+	}
+	return b.Display()
 }

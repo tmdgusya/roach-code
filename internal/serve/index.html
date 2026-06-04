@@ -641,7 +641,7 @@ es.onmessage=ev=>{
           const sp=el('span','item');sp.innerHTML=it.l+' <span class="v '+it.c+'">'+it.v+'</span>';strip.appendChild(sp);
         });
         if(e.usage.cacheHitTokens){const sp=el('span','item');sp.innerHTML='Cache <span class="v acc">'+Math.round(e.usage.cacheHitTokens/Math.max(1,e.usage.cacheHitTokens+e.usage.cacheMissTokens)*100)+'%</span>';strip.appendChild(sp);}
-        if(e.usage.costUsd){const sp=el('span','item');sp.innerHTML='Cost <span class="v">$'+e.usage.costUsd.toFixed(4)+'</span>';strip.appendChild(sp);}
+        if(e.usage.costUsd){const cs=e.usage.costSymbol||'$';const sp=el('span','item');sp.innerHTML='Cost <span class="v">'+cs+e.usage.costUsd.toFixed(4)+'</span>';strip.appendChild(sp);}
         log.appendChild(strip);scrollDown();
       } break;
     case 'notice': log.appendChild(el('div','notice'+(e.level==='warn'?' notice--warn':''),(e.level==='warn'?'! ':'')+(e.text||'')));scrollDown();break;
@@ -666,8 +666,9 @@ function fetchStatus(){
     // sidebar metrics
     const cacheTotal=(s.cacheHit||0)+(s.cacheMiss||0);
     $('#sm-cache').textContent=cacheTotal>0?Math.round((s.cacheHit||0)/cacheTotal*100)+'%':'—';
-    if(s.lastUsage?.costUsd!=null)$('#sm-cost').textContent='$'+s.lastUsage.costUsd.toFixed(4);
-    else if(s.lastUsage?.totalCost!=null)$('#sm-cost').textContent='$'+s.lastUsage.totalCost.toFixed(4);
+    const sym=s.costSymbol||'$';
+    if(s.cost!=null)$('#sm-cost').textContent=sym+s.cost.toFixed(4);
+    else if(s.lastUsage?.costUsd!=null)$('#sm-cost').textContent=sym+s.lastUsage.costUsd.toFixed(4);
     if(s.balance?.display)$('#sm-balance').textContent=s.balance.display;
     if(s.balance?.display)balanceInfo.textContent='💰 '+s.balance.display;
   }).catch(()=>{});

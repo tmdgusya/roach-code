@@ -105,6 +105,9 @@ func (s *Store) Begin(turn int, prompt string, msgIndex int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cur != nil {
+		// Persist the completed turn once before moving on, so snapshots
+		// accumulated in memory during the turn are written to disk.
+		s.persist(s.cur)
 		s.done = append(s.done, s.cur)
 	}
 	s.cur = &Checkpoint{Turn: turn, Time: time.Now(), Prompt: prompt, MsgIndex: msgIndex}

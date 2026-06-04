@@ -154,7 +154,7 @@ func (r readFile) scan(src io.Reader, offset, limit int) (string, error) {
 	scanner := bufio.NewScanner(src)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
-	var collected []string
+	collected := make([]string, 0, limit)
 	lineNo := 0
 	hasMore := false
 	for scanner.Scan() {
@@ -185,7 +185,9 @@ func (r readFile) scan(src io.Reader, offset, limit int) (string, error) {
 	maxShown := offset + len(collected)
 	w := len(fmt.Sprint(maxShown))
 
+	// Rough capacity: lines × (width + avg line length + 4 bytes for "→\n").
 	var b strings.Builder
+	b.Grow(len(collected) * (w + 80))
 	for i, line := range collected {
 		fmt.Fprintf(&b, "%*d→%s\n", w, offset+i+1, line)
 	}

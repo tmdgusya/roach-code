@@ -98,10 +98,11 @@ func LookupBuiltin(name string) (Tool, bool) {
 
 // Registry is a per-run set of tools: enabled built-ins plus plugin tools.
 type Registry struct {
-	mu    sync.RWMutex
-	tools map[string]Tool
-	order []string
-	canon map[string]json.RawMessage
+	mu           sync.RWMutex
+	tools        map[string]Tool
+	order        []string
+	canon        map[string]json.RawMessage
+	schemasCache []provider.ToolSchema
 }
 
 // NewRegistry returns an empty registry.
@@ -122,6 +123,7 @@ func (r *Registry) Add(t Tool) {
 	}
 	r.tools[name] = t
 	r.canon[name] = provider.CanonicalizeSchema(t.Schema())
+	r.schemasCache = nil
 }
 
 // MCPNamePrefix is the namespace every MCP tool name carries: the
@@ -162,6 +164,7 @@ func (r *Registry) RemovePrefix(prefix string) int {
 		kept = append(kept, name)
 	}
 	r.order = kept
+	r.schemasCache = nil
 	return removed
 }
 
@@ -195,7 +198,21 @@ func (r *Registry) Names() []string {
 // Schemas exports tool definitions in stable name order for the provider.
 func (r *Registry) Schemas() []provider.ToolSchema {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
+	if r.schemasCache != nil {
+		out := make([]provider.ToolSchema, len(r.schemasCache))
+		copy(out, r.schemasCache)
+		r.mu.RUnlock()
+		return out
+	}
+	r.mu.RUnlock()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.schemasCache != nil {
+		out := make([]provider.ToolSchema, len(r.schemasCache))
+		copy(out, r.schemasCache)
+		return out
+	}
 
 	names := make([]string, len(r.order))
 	copy(names, r.order)
@@ -213,5 +230,6 @@ func (r *Registry) Schemas() []provider.ToolSchema {
 			Parameters:  r.canon[name],
 		})
 	}
+	r.schemasCache = out
 	return out
 }

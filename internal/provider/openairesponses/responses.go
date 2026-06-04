@@ -364,17 +364,17 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || !strings.HasPrefix(line, "data:") {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 || !bytes.HasPrefix(line, []byte("data:")) {
 			continue
 		}
-		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if data == "[DONE]" {
+		data := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data:")))
+		if bytes.Equal(data, []byte("[DONE]")) {
 			break
 		}
 
 		var ev respEvent
-		if err := json.Unmarshal([]byte(data), &ev); err != nil {
+		if err := json.Unmarshal(data, &ev); err != nil {
 			out <- provider.Chunk{Type: provider.ChunkError, Err: fmt.Errorf("%s: decode stream: %w", c.name, err)}
 			return
 		}

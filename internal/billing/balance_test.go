@@ -38,9 +38,9 @@ func TestFetchDeepSeekShape(t *testing.T) {
 	if len(b.Infos) != 2 {
 		t.Fatalf("want 2 infos, got %d", len(b.Infos))
 	}
-	// Display prefers CNY → "¥110.00", not the first (USD) entry.
-	if got := b.Display(); got != "¥110.00" {
-		t.Errorf("Display = %q, want %q", got, "¥110.00")
+	// Display prefers USD → "$15.30", not the second (CNY) entry.
+	if got := b.Display(); got != "$15.30" {
+		t.Errorf("Display = %q, want %q", got, "$15.30")
 	}
 }
 

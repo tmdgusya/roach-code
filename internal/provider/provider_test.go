@@ -100,6 +100,33 @@ func TestSanitizeToolPairingLeavesWellFormedUnchanged(t *testing.T) {
 
 // --- Pricing.Cost ---
 
+// TestSanitizeToolPairingInterleavedAssistant proves that an assistant turn
+// that arrives before the previous assistant's tool results are satisfied is
+// detected as malformed, so the backfill path runs and placeholders are
+// inserted. Without this check toolPairingClean would incorrectly return true,
+// causing SanitizeToolPairing to return the slice unchanged and leave dangling
+// tool_calls — a history the OpenAI API rejects with 400.
+func TestSanitizeToolPairingInterleavedAssistant(t *testing.T) {
+	in := []Message{
+		{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "c1", Name: "ls"}}},
+		{Role: RoleAssistant, Content: "let me try again"},
+		{Role: RoleTool, ToolCallID: "c1", Name: "ls", Content: "main.go"},
+	}
+	out := SanitizeToolPairing(in)
+	if toolPairingClean(in) {
+		t.Fatal("toolPairingClean should have returned false for interleaved assistant")
+	}
+	if !toolIDsAnswered(out) {
+		t.Fatalf("interleaved assistant left tool_call unanswered: %+v", out)
+	}
+	// The backfilled result must appear before the second assistant turn.
+	if out[1].Role != RoleTool {
+		t.Fatalf("expected backfilled tool result at index 1, got %+v", out[1])
+	}
+}
+
+// --- Pricing.Cost ---
+
 func TestPricingCostNil(t *testing.T) {
 	var p *Pricing
 	if got := p.Cost(&Usage{PromptTokens: 100}); got != 0 {

@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -218,4 +221,51 @@ func TestServeContextEndpoint(t *testing.T) {
 	if body["used"] != 0 {
 		t.Errorf("used = %d, want 0", body["used"])
 	}
+}
+
+func TestServeModelSwitchConcurrentSessions(t *testing.T) {
+	dir := t.TempDir()
+	sessionPath := filepath.Join(dir, "session.jsonl")
+	if err := os.WriteFile(sessionPath, []byte(`{"role":"user","content":"hello"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	bc := NewBroadcaster()
+	ctrl := control.New(control.Options{Sink: bc})
+	ctrl.SetSessionPath(sessionPath)
+	s := New(ctrl, bc)
+	s.SetModelBuilder(func(ref string, carry []provider.Message) (*control.Controller, error) {
+		next := control.New(control.Options{Sink: bc})
+		next.SetSessionPath(sessionPath)
+		return next, nil
+	})
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			resp, err := http.Get(srv.URL + "/sessions")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			resp.Body.Close()
+		}()
+		go func() {
+			defer wg.Done()
+			resp, err := http.Post(srv.URL+"/model", "application/json", strings.NewReader(`{"ref":"test/model"}`))
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusNoContent {
+				t.Errorf("model switch status = %d, want 204", resp.StatusCode)
+			}
+		}()
+	}
+	wg.Wait()
 }

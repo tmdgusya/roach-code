@@ -43,6 +43,7 @@ node_modules/
 
 # Local agent/loop scratch state and runtime pid files
 .omo/
+.qwen/
 server.pid
 
 # Editor / OS

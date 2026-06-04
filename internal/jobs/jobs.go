@@ -254,7 +254,7 @@ func (m *Manager) Wait(ctx context.Context, ids []string, timeoutSec int) []Resu
 func (m *Manager) resolve(ids []string) []*Job {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	var out []*Job
+	out := make([]*Job, 0, len(ids))
 	if len(ids) == 0 {
 		for _, id := range m.order {
 			j := m.jobs[id]
@@ -293,7 +293,7 @@ func (m *Manager) results(targets []*Job) []Result {
 func (m *Manager) Running() []View {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	var out []View
+	out := make([]View, 0, len(m.order))
 	for _, id := range m.order {
 		j := m.jobs[id]
 		j.mu.Lock()
