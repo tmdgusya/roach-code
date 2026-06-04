@@ -124,13 +124,29 @@ func TestDrainMultiple(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 
-	m.Start("bash", "", func(_ context.Context, _ io.Writer) (string, error) {
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+
+	j1 := m.Start("bash", "", func(_ context.Context, _ io.Writer) (string, error) {
+		started <- struct{}{}
+		<-release
 		return "", nil
 	})
-	m.Start("task", "label", func(_ context.Context, _ io.Writer) (string, error) {
+	j2 := m.Start("task", "label", func(_ context.Context, _ io.Writer) (string, error) {
+		started <- struct{}{}
+		<-release
 		return "answer", nil
 	})
-	m.Wait(context.Background(), nil, 5)
+
+	<-started
+	<-started
+	close(release)
+
+	res := m.Wait(context.Background(), []string{j1.ID, j2.ID}, 5)
+	if len(res) != 2 {
+		t.Fatalf("want 2 wait results, got %d", len(res))
+	}
+
 	note := m.DrainCompletedNote()
 	if note == "" {
 		t.Fatal("drain should not be empty after 2 completions")
