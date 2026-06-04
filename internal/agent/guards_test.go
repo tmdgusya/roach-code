@@ -85,15 +85,14 @@ func TestFinishReasonMessage(t *testing.T) {
 
 // --- parallel-dispatch tests ---
 
-// fakeTool is a minimal Tool stand-in for dispatch tests; ReadOnly is
-// configurable and Execute sleeps a fixed duration so we can measure
-// serial vs parallel behaviour by wall-clock.
 type fakeTool struct {
 	name     string
 	readOnly bool
 	delay    time.Duration
 	err      error
 	calls    *int32 // shared counter to assert all dispatched
+	started  chan<- string
+	release  <-chan struct{}
 }
 
 func (f fakeTool) Name() string            { return f.name }
@@ -104,15 +103,64 @@ func (f fakeTool) Execute(ctx context.Context, _ json.RawMessage) (string, error
 	if f.calls != nil {
 		atomic.AddInt32(f.calls, 1)
 	}
-	select {
-	case <-time.After(f.delay):
-	case <-ctx.Done():
-		return "", ctx.Err()
+	if f.started != nil {
+		f.started <- f.name
+	}
+	if f.release != nil {
+		select {
+		case <-f.release:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	} else {
+		select {
+		case <-time.After(f.delay):
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
 	}
 	if f.err != nil {
 		return "", f.err
 	}
 	return f.name + " done", nil
+}
+
+func waitStarted(t *testing.T, started <-chan string, n int) []string {
+	t.Helper()
+	var out []string
+	for len(out) < n {
+		select {
+		case name := <-started:
+			out = append(out, name)
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for %d starts, got %v", n, out)
+		}
+	}
+	return out
+}
+
+func requireStartedSet(t *testing.T, got []string, want ...string) {
+	t.Helper()
+	if !reflect.DeepEqual(stringSet(got), stringSet(want)) {
+		t.Fatalf("started = %v, want set %v", got, want)
+	}
+}
+
+func stringSet(in []string) map[string]bool {
+	out := make(map[string]bool, len(in))
+	for _, s := range in {
+		out[s] = true
+	}
+	return out
+}
+
+func requireNoStart(t *testing.T, started <-chan string, blockedName string) {
+	t.Helper()
+	select {
+	case name := <-started:
+		t.Fatalf("%s started before its segment was released; unexpected start %q", blockedName, name)
+	case <-time.After(50 * time.Millisecond):
+	}
 }
 
 func TestPartitionToolCallsAllReadOnly(t *testing.T) {
@@ -230,42 +278,46 @@ func TestExecuteBatchParallelReadOnly(t *testing.T) {
 // own position in the provider-ordered batch: read-only runs before and after it
 // may still parallelise within their contiguous segments.
 func TestExecuteBatchSegmentsAroundWrites(t *testing.T) {
-	const delay = 40 * time.Millisecond
+	started := make(chan string, 5)
+	firstReadRelease := make(chan struct{})
+	writeRelease := make(chan struct{})
+	secondReadRelease := make(chan struct{})
+
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "ro1", readOnly: true, delay: delay})
-	reg.Add(fakeTool{name: "ro2", readOnly: true, delay: delay})
-	reg.Add(fakeTool{name: "ro3", readOnly: true, delay: delay})
-	reg.Add(fakeTool{name: "ro4", readOnly: true, delay: delay})
-	reg.Add(fakeTool{name: "rw", readOnly: false, delay: delay})
+	reg.Add(fakeTool{name: "ro1", readOnly: true, started: started, release: firstReadRelease})
+	reg.Add(fakeTool{name: "ro2", readOnly: true, started: started, release: firstReadRelease})
+	reg.Add(fakeTool{name: "ro3", readOnly: true, started: started, release: secondReadRelease})
+	reg.Add(fakeTool{name: "ro4", readOnly: true, started: started, release: secondReadRelease})
+	reg.Add(fakeTool{name: "rw", readOnly: false, started: started, release: writeRelease})
 
 	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
 
-	start := time.Now()
-	results := a.executeBatch(context.Background(), []provider.ToolCall{
-		{Name: "ro1"},
-		{Name: "ro2"},
-		{Name: "rw"},
-		{Name: "ro3"},
-		{Name: "ro4"},
-	})
-	elapsed := time.Since(start)
+	done := make(chan []string, 1)
+	go func() {
+		done <- a.executeBatch(context.Background(), []provider.ToolCall{
+			{Name: "ro1"},
+			{Name: "ro2"},
+			{Name: "rw"},
+			{Name: "ro3"},
+			{Name: "ro4"},
+		})
+	}()
 
+	requireStartedSet(t, waitStarted(t, started, 2), "ro1", "ro2")
+	requireNoStart(t, started, "rw")
+	close(firstReadRelease)
+
+	requireStartedSet(t, waitStarted(t, started, 1), "rw")
+	requireNoStart(t, started, "second read-only segment")
+	close(writeRelease)
+
+	requireStartedSet(t, waitStarted(t, started, 2), "ro3", "ro4")
+	close(secondReadRelease)
+
+	results := <-done
 	want := []string{"ro1 done", "ro2 done", "rw done", "ro3 done", "ro4 done"}
-	if len(results) != len(want) {
-		t.Fatalf("got %d results, want %d: %v", len(results), len(want), results)
-	}
-	for i := range want {
-		if results[i] != want[i] {
-			t.Fatalf("results out of order or wrong: got %v want %v", results, want)
-		}
-	}
-	// Desired shape is roughly 3*delay: (ro1|ro2), then rw, then (ro3|ro4).
-	// Old all-serial behaviour is roughly 5*delay and should fail this bound.
-	if elapsed >= 4*delay {
-		t.Errorf("mixed batch took %v (>= %v) — read-only segments did not parallelise", elapsed, 4*delay)
-	}
-	if elapsed < 2*delay {
-		t.Errorf("mixed batch took only %v — write call appears to have overlapped a read-only segment", elapsed)
+	if !reflect.DeepEqual(results, want) {
+		t.Fatalf("results out of order or wrong: got %v want %v", results, want)
 	}
 }
 
