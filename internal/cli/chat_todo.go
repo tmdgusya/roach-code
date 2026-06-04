@@ -42,7 +42,8 @@ func (m chatTUI) renderTodoPanel() string {
 	shown := 0
 	for _, t := range p.Todos {
 		if shown >= todoPanelMaxRows {
-			b.WriteString(dim(fmt.Sprintf("  +%d more", len(p.Todos)-shown)) + "\n")
+			b.WriteString(dim(fmt.Sprintf("  +%d more", len(p.Todos)-shown)))
+			b.WriteString("\n")
 			break
 		}
 		shown++
@@ -52,15 +53,23 @@ func (m chatTUI) renderTodoPanel() string {
 		}
 		switch t.Status {
 		case "completed":
-			b.WriteString(indent + green("✔") + " " + dim(t.Content) + "\n")
+			b.WriteString(indent)
+			b.WriteString(green("✔"))
+			b.WriteString(" ")
+			b.WriteString(dim(t.Content))
+			b.WriteString("\n")
 		case "in_progress":
 			label := t.Content
 			if t.ActiveForm != "" {
 				label = t.ActiveForm
 			}
-			b.WriteString(indent + yellow("▶ "+label) + "\n")
+			b.WriteString(indent)
+			b.WriteString(yellow("▶ " + label))
+			b.WriteString("\n")
 		default:
-			b.WriteString(indent + dim("○ "+t.Content) + "\n")
+			b.WriteString(indent)
+			b.WriteString(dim("○ " + t.Content))
+			b.WriteString("\n")
 		}
 	}
 	return todoPanelStyle.Width(max(m.width, 10)).Render(strings.TrimRight(b.String(), "\n"))
