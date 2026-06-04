@@ -75,10 +75,10 @@ func TestConfigureKeys(t *testing.T) {
 
 // TestConfigureKeysReusesExistingEnv covers the "user already typed the key
 // in the URL-fetch flow, don't ask again" path. When the env var is set
-// (either from .env or from a prior os.Setenv in the wizard), configureKeys
+// (either from ~/.env or from a prior os.Setenv in the wizard), configureKeys
 // must NOT consume from the input stream — otherwise the user's next typed
 // line bleeds into the next provider's prompt. It also must include the
-// existing value in envLines so the value is re-pinned into .env on
+// existing value in envLines so the value is re-pinned into ~/.env on
 // re-runs of setup.
 func TestConfigureKeysReusesExistingEnv(t *testing.T) {
 	t.Setenv("DEEPSEEK_API_KEY", "preset-ds-key")
@@ -149,7 +149,7 @@ func TestAppendEnvUpsertReplacesExistingKey(t *testing.T) {
 }
 
 // TestAppendEnvUpsertHandlesExportPrefix proves `export FOO=...` style lines
-// also get replaced, since users might hand-edit .env in shell-friendly form.
+// also get replaced, since users might hand-edit ~/.env in shell-friendly form.
 func TestAppendEnvUpsertHandlesExportPrefix(t *testing.T) {
 	t.Setenv("FOO", "")
 	p := filepath.Join(t.TempDir(), ".env")

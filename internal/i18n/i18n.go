@@ -270,7 +270,7 @@ type Messages struct {
 	ErrorPrefix               string // "error:" — prefix for fatal-error output
 	ReconfigureOnUnknownModel string // shown when the configured model no longer resolves and setup is re-run
 	WriteConfigErr            string // "write config:" — prefix for write failure
-	WriteEnvErr               string // "write .env:" — prefix for env-write failure
+	WriteEnvErr               string // "write ~/.env:" — prefix for env-write failure
 
 	// selection menus
 	SelectOneHint  string // "(↑/↓ · Enter · q to cancel)"

@@ -6,18 +6,14 @@ import (
 	"testing"
 )
 
-// TestLoadDotEnvFallsBackToHome proves the unified-key behaviour: the working
-// directory's .env wins, but a key only present in ~/.env is still picked up —
-// so a key set once in the home .env (the desktop app writes there) reaches the
-// CLI run from any project directory. Existing env vars beat both files.
-func TestLoadDotEnvFallsBackToHome(t *testing.T) {
+func TestLoadDotEnvIgnoresLocalDotEnv(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
 
 	if err := os.WriteFile(filepath.Join(cwd, ".env"), []byte("KEY_CWD=from_cwd\nKEY_SHARED=cwd_wins\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(home, ".env"), []byte("KEY_HOME=from_home\nKEY_SHARED=home_loses\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".env"), []byte("KEY_HOME=from_home\nKEY_SHARED=home_wins\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -35,19 +31,17 @@ func TestLoadDotEnvFallsBackToHome(t *testing.T) {
 
 	loadDotEnv()
 
-	if got := os.Getenv("KEY_CWD"); got != "from_cwd" {
-		t.Errorf("cwd-only key not loaded: KEY_CWD=%q", got)
+	if got := os.Getenv("KEY_CWD"); got != "" {
+		t.Errorf("local .env should not be loaded: KEY_CWD=%q", got)
 	}
 	if got := os.Getenv("KEY_HOME"); got != "from_home" {
-		t.Errorf("~/.env fallback failed: KEY_HOME=%q want from_home", got)
+		t.Errorf("global .env not loaded: KEY_HOME=%q want from_home", got)
 	}
-	if got := os.Getenv("KEY_SHARED"); got != "cwd_wins" {
-		t.Errorf("cwd .env should take precedence over ~/.env: KEY_SHARED=%q want cwd_wins", got)
+	if got := os.Getenv("KEY_SHARED"); got != "home_wins" {
+		t.Errorf("global .env should be used instead of local .env: KEY_SHARED=%q want home_wins", got)
 	}
 }
 
-// TestLoadDotEnvDoesNotOverrideEnv confirms an already-set environment variable
-// beats both .env files (the documented first-wins contract).
 func TestLoadDotEnvDoesNotOverrideEnv(t *testing.T) {
 	cwd := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cwd, ".env"), []byte("PINNED=from_file\n"), 0o600); err != nil {

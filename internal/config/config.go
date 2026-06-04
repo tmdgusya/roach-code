@@ -528,8 +528,8 @@ func Default() *Config {
 }
 
 // Load builds the configuration: defaults, then user config, then project
-// config, then any MCP servers from the project's .mcp.json. A .env in the
-// working directory is loaded first so api_key_env can resolve.
+// config, then any MCP servers from the project's .mcp.json. The user-global
+// ~/.env is loaded first so api_key_env can resolve.
 func Load() (*Config, error) {
 	loadDotEnv()
 	cfg := Default()
@@ -604,8 +604,8 @@ func mergeTOMLPlugins(paths []string) ([]PluginEntry, error) {
 // LoadForEdit returns a config to seed the `roach-code setup` wizard when reconfiguring:
 // the built-in defaults with the file at path (if present) decoded on top, so a
 // reconfigure preserves the user's existing providers and agent settings instead
-// of resetting to defaults. .env is loaded so api_key_env resolution works while
-// the wizard decides which keys are still missing.
+// of resetting to defaults. ~/.env is loaded so api_key_env resolution works
+// while the wizard decides which keys are still missing.
 func LoadForEdit(path string) *Config {
 	loadDotEnv()
 	cfg := Default()

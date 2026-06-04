@@ -75,7 +75,7 @@ make cross      # -> dist/（darwin|linux|windows × amd64|arm64）
 
 ```sh
 roach-code setup                      # 配置向导 → ./roach-code.toml
-export DEEPSEEK_API_KEY=sk-...  # 或写入 .env（见 .env.example）
+export DEEPSEEK_API_KEY=sk-...  # 或写入 ~/.env（见 .env.example）
 roach-code chat                       # 然后在会话里运行 /init 生成 AGENTS.md（项目记忆）
 roach-code run "把 main.go 里的 TODO 实现掉"
 roach-code run --model mimo-pro "给这个函数补单元测试"

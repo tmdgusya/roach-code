@@ -77,7 +77,7 @@ make cross      # -> dist/ (darwin|linux|windows × amd64|arm64)
 
 ```sh
 roach-code setup                      # 설정 마법사 → ./roach-code.toml
-export DEEPSEEK_API_KEY=sk-...  # 또는 .env에 넣기 (.env.example 참고)
+export DEEPSEEK_API_KEY=sk-...  # 또는 ~/.env에 넣기 (.env.example 참고)
 roach-code chat                       # 이후 /init 으로 AGENTS.md(프로젝트 메모리) 생성
 roach-code run "implement the TODOs in main.go"
 roach-code run --model mimo-pro "add unit tests for this function"

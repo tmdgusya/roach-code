@@ -7,15 +7,18 @@ import (
 	"strings"
 )
 
-// loadDotEnv loads .env files into the process environment without overriding
-// variables that are already set. The working-directory .env is read first, so a
-// project-local key takes precedence; then ~/.env is read as a fallback. This
-// unifies the key source across frontends: the desktop app's working dir is
-// $HOME so it writes ~/.env, and the CLI — run from any project directory — now
-// picks up that same key instead of needing a copy in every project's .env.
-// Existing environment variables always win over both files.
+// GlobalDotEnvPath returns the absolute path to the user-global ~/.env file
+// used to persist API keys across all projects. Returns "" if the home
+// directory cannot be resolved.
+func GlobalDotEnvPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".env")
+}
+
 func loadDotEnv() {
-	loadDotEnvFile(".env")
 	if home, err := os.UserHomeDir(); err == nil {
 		loadDotEnvFile(filepath.Join(home, ".env"))
 	}

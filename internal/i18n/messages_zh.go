@@ -20,7 +20,7 @@ var Chinese = Messages{
 	StepSetKey:      "设置 API key",
 
 	InitHint:       "项目记忆（AGENTS.md）在会话内由模型生成：运行 `roach-code chat`，然后 `/init` —— 模型会分析代码库并写入。配置请用 `roach-code setup`。",
-	StepSetKeyHint: "执行 export DEEPSEEK_API_KEY=… 或写入 .env",
+	StepSetKeyHint: "执行 export DEEPSEEK_API_KEY=… 或写入 ~/.env",
 	StepChatDesc:   "交互式会话",
 	StepRunDesc:    "执行单次任务",
 	HelpFooter:     "roach-code help · 查看全部命令",
@@ -176,13 +176,13 @@ var Chinese = Messages{
 	RewindEmpty:            "(空)",
 
 	SelectProvidersLabel:  "选择要启用的 provider",
-	EnterAPIKeysHeader:    "输入 API key（回车跳过、稍后写入 .env）：",
+	EnterAPIKeysHeader:    "输入 API key（回车跳过、稍后写入 ~/.env）：",
 	MissingKeyIntro:       "roach-code.toml 已配置好 — 只差一个 API key 就可以开始。",
 	WroteFileFmt:          "已写入 %s",
 	SetupComplete:         "设置完成。",
 	SetupCancelled:        "设置已取消。",
 	TryHintFmt:            "试试: %s",
-	NextHint:              "下一步：设置 API key（export DEEPSEEK_API_KEY=... 或写入 .env），然后运行 `roach-code run \"你的任务\"`。",
+	NextHint:              "下一步：设置 API key（export DEEPSEEK_API_KEY=... 或写入 ~/.env），然后运行 `roach-code run \"你的任务\"`。",
 	ConfirmReconfigureFmt: "%s 已存在。重新配置并覆盖？",
 	KeepingExisting:       "保留原配置不变。",
 	NotOverwritingFmt:     "%s 已存在，不覆盖",
@@ -232,7 +232,7 @@ var Chinese = Messages{
 	ErrorPrefix:               "错误：",
 	ReconfigureOnUnknownModel: "配置的模型已不可用 —— 重新运行引导配置。",
 	WriteConfigErr:            "写入配置失败：",
-	WriteEnvErr:               "写入 .env 失败：",
+	WriteEnvErr:               "写入 ~/.env 失败：",
 
 	SelectOneHint:  "(↑/↓ · Enter · q 取消)",
 	SelectManyHint: "(↑/↓ · Space · Enter · q)",
@@ -243,7 +243,7 @@ var Chinese = Messages{
   roach-code chat [--model NAME] [-c|--continue] [--resume]   交互式会话（多轮；-c 恢复最近一次，--resume 选择一个）
   roach-code run  [--model NAME] [--max-steps N] <task>   执行单次任务后退出
   roach-code serve [--model NAME] [--addr HOST:PORT]      通过 HTTP+SSE 提供会话（浏览器客户端在 /）
-  roach-code setup [path]                                 交互式配置向导；生成 roach-code.toml（及 .env）
+  roach-code setup [path]                                 交互式配置向导；生成 roach-code.toml（及 ~/.env）
   roach-code mcp <add|remove|list>                        管理 roach-code.toml 里的 MCP 服务器
   roach-code codex <login|logout|status>                  使用 ChatGPT 订阅登录 Codex（OAuth）
   roach-code models [refresh [provider]] [--dry-run]      列出模型，或通过 provider 的 /models 接口刷新
