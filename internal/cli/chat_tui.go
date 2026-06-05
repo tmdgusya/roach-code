@@ -728,13 +728,24 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cycleMode()
 			return m, nil
 		case "enter":
+			line := strings.TrimSpace(m.input.Value())
 			if m.state == tuiRunning {
+				// Goal management must stay reachable while a turn is running: `/goal <cond>`
+				// is explicitly allowed to arm/update the standing goal for the in-flight
+				// turn tail, and `/goal clear` must be able to stop a goal loop.
+				if line == "/goal" || strings.HasPrefix(line, "/goal ") {
+					m.rememberSubmittedInput(line)
+					m.input.Reset()
+					m.input.SetHeight(1)
+					m.pastedBlocks = nil
+					cmds = append(cmds, m.runSlashCommand(line))
+					return m, finalize(m, cmds)
+				}
 				return m, nil // ignore Enter while a turn is in flight
 			}
 			if m.modelSwitchPending {
 				return m, nil // ignore Enter while /model switch is building
 			}
-			line := strings.TrimSpace(m.input.Value())
 
 			if line == "" {
 				return m, nil
