@@ -679,7 +679,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 			"display":   b.Display(),
 		}
 	}
-	if j := s.getCtrl().Jobs(); len(j) > 0 {
+	if j := s.getCtrl().AllJobs(); len(j) > 0 {
 		sess["jobs"] = j
 	}
 	writeJSON(w, sess)

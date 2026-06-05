@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"roach-code/internal/agent"
 	"roach-code/internal/event"
+	"roach-code/internal/jobs"
 	"roach-code/internal/plugin"
 	"roach-code/internal/provider"
 	"roach-code/internal/tool"
@@ -52,6 +54,36 @@ func TestNewTreatsTypedNilSinkAsDiscard(t *testing.T) {
 	c := New(Options{Sink: sink})
 
 	c.notice("typed nil sink should not panic")
+}
+
+func TestJobsTextListsOutputsAndKillsJobs(t *testing.T) {
+	jm := jobs.NewManager(event.Discard)
+	defer jm.Close()
+	release := make(chan struct{})
+	wrote := make(chan struct{})
+	j := jm.Start("task", "scan", func(ctx context.Context, out io.Writer) (string, error) {
+		io.WriteString(out, "first\n")
+		close(wrote)
+		<-ctx.Done()
+		<-release
+		return "", ctx.Err()
+	})
+	c := New(Options{Jobs: jm})
+	<-wrote
+
+	list := c.JobsText("/jobs")
+	if !strings.Contains(list, j.ID) || !strings.Contains(list, "scan") || !strings.Contains(list, "running") {
+		t.Fatalf("/jobs list should show retained job metadata:\n%s", list)
+	}
+	out := c.JobsText("/jobs output " + j.ID)
+	if !strings.Contains(out, "first") || !strings.Contains(out, "running") {
+		t.Fatalf("/jobs output should show incremental output and status:\n%s", out)
+	}
+	kill := c.JobsText("/jobs kill " + j.ID)
+	close(release)
+	if !strings.Contains(kill, "Killed") {
+		t.Fatalf("/jobs kill should stop a running job:\n%s", kill)
+	}
 }
 
 func TestRunTurnSnapshotsActivityWhenTranscriptChanges(t *testing.T) {

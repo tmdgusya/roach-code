@@ -9,6 +9,7 @@ import (
 
 	"roach-code/internal/event"
 	"roach-code/internal/i18n"
+	"roach-code/internal/provider"
 )
 
 // newTestChatTUI builds a chatTUI with just the pieces the streaming/commit and
@@ -275,6 +276,147 @@ func TestToolProgressTailCap(t *testing.T) {
 	}
 	if strings.Contains(block, "lineA") {
 		t.Fatalf("oldest line should have scrolled out of the tail:\n%s", block)
+	}
+}
+
+func TestSubagentChildToolsNestUnderTaskAndSummarize(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"inspect ui","prompt":"x"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1/r1", ParentID: "task1", Name: "read_file", Args: `{"path":"a.go"}`}})
+
+	panel := ansi.Strip(m.renderSubagentPanel())
+	if !strings.Contains(panel, "AGENTS") || !strings.Contains(panel, "Read a.go") {
+		t.Fatalf("live subagent panel should show current child activity:\n%s", panel)
+	}
+
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "task1/r1", ParentID: "task1", Name: "read_file", Output: "ok"}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "task1", Name: "task", Output: "done"}})
+
+	plain := ansi.Strip(strings.Join(m.transcript, "\n"))
+	if !strings.Contains(plain, "Task(inspect ui)") {
+		t.Fatalf("task summary should keep the task label:\n%s", plain)
+	}
+	if !strings.Contains(plain, "│ ● Read(a.go)") {
+		t.Fatalf("subagent child tool should be nested under the task rail:\n%s", plain)
+	}
+	if !strings.Contains(plain, "1 tools") {
+		t.Fatalf("task summary should include child tool count:\n%s", plain)
+	}
+	if panel := ansi.Strip(m.renderSubagentPanel()); panel != "" {
+		t.Fatalf("completed foreground subagent should leave the live panel:\n%s", panel)
+	}
+}
+
+func TestSubagentChildProgressUsesNestedRail(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"run tests","prompt":"x"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1/b1", ParentID: "task1", Name: "bash", Args: `{"command":"go test"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "task1/b1", Output: "ok pkg\n"}})
+
+	plain := ansi.Strip(strings.Join(m.transcript, "\n"))
+	if !strings.Contains(plain, "│ ● Bash(go test)") || !strings.Contains(plain, "│   │ ok pkg") {
+		t.Fatalf("nested tool progress should stay under the subagent rail:\n%s", plain)
+	}
+}
+
+func TestBackgroundSubagentSummaryIsNotMarkedDone(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"long scan","prompt":"x","run_in_background":true}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "task1", Name: "task", Output: "Started background task"}})
+
+	plain := ansi.Strip(strings.Join(m.transcript, "\n"))
+	if !strings.Contains(plain, "background") {
+		t.Fatalf("background task should be marked background, not done:\n%s", plain)
+	}
+}
+
+func TestFailedSubagentSummaryIncludesReason(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"scan auth","prompt":"x"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "task1", Name: "task", Err: "permission denied"}})
+
+	plain := ansi.Strip(strings.Join(m.transcript, "\n"))
+	if !strings.Contains(plain, "failed") || !strings.Contains(plain, "permission denied") {
+		t.Fatalf("failed subagent summary should include status and reason:\n%s", plain)
+	}
+	if panel := ansi.Strip(m.renderSubagentPanel()); panel != "" {
+		t.Fatalf("failed foreground subagent should leave the live panel:\n%s", panel)
+	}
+}
+
+func TestCancelledSubagentSummaryUsesCancelledStatus(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"scan auth","prompt":"x"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "task1", Name: "task", Err: "context canceled"}})
+
+	plain := ansi.Strip(strings.Join(m.transcript, "\n"))
+	if !strings.Contains(plain, "cancelled") {
+		t.Fatalf("cancelled subagent summary should use cancelled status:\n%s", plain)
+	}
+	if strings.Contains(plain, "failed") {
+		t.Fatalf("cancelled subagent summary should not be marked failed:\n%s", plain)
+	}
+}
+
+func TestSubagentSummarySanitizesControlCodes(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{
+		ID:   "task1",
+		Name: "task",
+		Args: `{"description":"scan \u001b[31mred\u001b[0m","prompt":"x"}`,
+	}})
+	panel := m.renderSubagentPanel()
+	if strings.Contains(panel, "\x1b[31m") || strings.Contains(panel, "\x1b[0m") {
+		t.Fatalf("live subagent panel should not expose raw ANSI controls:\n%q", panel)
+	}
+
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{
+		ID:   "task1",
+		Name: "task",
+		Err:  "bad \x1b[2Jreason",
+	}})
+	joined := strings.Join(m.transcript, "\n")
+	if strings.Contains(joined, "\x1b[31m") || strings.Contains(joined, "\x1b[2J") {
+		t.Fatalf("terminal subagent summary should not expose raw ANSI controls:\n%q", joined)
+	}
+	plain := ansi.Strip(joined)
+	if !strings.Contains(plain, "scan red") || !strings.Contains(plain, "bad reason") {
+		t.Fatalf("sanitized text should preserve readable content:\n%s", plain)
+	}
+}
+
+func TestSubagentUsageTracksTokensWithoutParentTurnLeak(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"token scan","prompt":"x"}`}})
+	m.ingestEvent(event.Event{Kind: event.Usage, ParentID: "task1", Usage: &provider.Usage{TotalTokens: 2400, CompletionTokens: 400}})
+
+	panel := ansi.Strip(m.renderSubagentPanel())
+	if !strings.Contains(panel, "2K tokens") {
+		t.Fatalf("live subagent panel should show subagent token count:\n%s", panel)
+	}
+	if m.turnTokens != 0 {
+		t.Fatalf("subagent usage must not increment parent turn token counter, got %d", m.turnTokens)
+	}
+
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "task1", Name: "task", Output: "done"}})
+	plain := ansi.Strip(strings.Join(m.transcript, "\n"))
+	if !strings.Contains(plain, "2K tokens") {
+		t.Fatalf("terminal subagent summary should show token count:\n%s", plain)
+	}
+}
+
+func TestSubagentApprovalShowsRequester(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"review db","prompt":"x"}`}})
+	m.ingestEvent(event.Event{Kind: event.ApprovalRequest, ParentID: "task1", Approval: event.Approval{ID: "a1", Tool: "bash", Subject: "go test"}})
+
+	banner := ansi.Strip(m.renderApprovalBanner())
+	if !strings.Contains(banner, "requested by review db") {
+		t.Fatalf("approval banner should show the requesting subagent:\n%s", banner)
+	}
+	panel := ansi.Strip(m.renderSubagentPanel())
+	if !strings.Contains(panel, "Awaiting approval Bash go test") {
+		t.Fatalf("live subagent panel should show approval activity:\n%s", panel)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 
 	"roach-code/internal/config"
 	"roach-code/internal/i18n"
+	"roach-code/internal/jobs"
 	"roach-code/internal/skill"
 )
 
@@ -31,6 +32,7 @@ type ArgData struct {
 	DisconnectedMCP []string
 	ModelRefs       []string
 	CurrentModel    string
+	Jobs            []jobs.View
 }
 
 // SlashArgItems completes the arguments of a management slash command
@@ -57,6 +59,8 @@ func SlashArgItems(line string, d ArgData) ([]SlashItem, int) {
 		raw = skillArgItems(prior, d)
 	case "/hooks":
 		raw = hooksArgItems(prior)
+	case "/jobs":
+		raw = jobsArgItems(prior, d)
 	case "/effort":
 		raw = effortArgItems(prior, d)
 	case "/theme":
@@ -119,6 +123,28 @@ func effortArgItems(prior []string, d ArgData) []SlashItem {
 			out = append(out, SlashItem{Label: level, Insert: level, Hint: hint})
 		}
 		return out
+	}
+	return nil
+}
+
+func jobsArgItems(prior []string, d ArgData) []SlashItem {
+	if len(prior) <= 1 {
+		return []SlashItem{
+			{Label: "list", Insert: "list", Hint: "show background jobs"},
+			{Label: "output", Insert: "output ", Hint: "inspect a job's output", Descend: true},
+			{Label: "kill", Insert: "kill ", Hint: "stop a running job", Descend: true},
+		}
+	}
+	if len(prior) == 2 && (prior[1] == "output" || prior[1] == "show" || prior[1] == "kill" || prior[1] == "cancel" || prior[1] == "stop") {
+		items := make([]SlashItem, 0, len(d.Jobs))
+		for _, j := range d.Jobs {
+			hint := j.Kind + " · " + j.Status
+			if j.Label != "" {
+				hint += " · " + j.Label
+			}
+			items = append(items, SlashItem{Label: j.ID, Insert: j.ID, Hint: hint})
+		}
+		return items
 	}
 	return nil
 }
@@ -260,6 +286,8 @@ func (c *Controller) managementNotice(trimmed string) bool {
 		c.notice(c.skillListText())
 	case "/hooks":
 		c.notice(c.hookListText())
+	case "/jobs":
+		c.notice(c.JobsText(trimmed))
 	case "/mcp":
 		if len(fields) >= 3 && fields[1] == "connect" {
 			n, err := c.ConnectConfiguredMCPServer(fields[2])
@@ -275,6 +303,55 @@ func (c *Controller) managementNotice(trimmed string) bool {
 		return false
 	}
 	return true
+}
+
+func (c *Controller) JobsText(input string) string {
+	fields := strings.Fields(input)
+	if c.jobs == nil {
+		return "background jobs are not available"
+	}
+	if len(fields) == 0 {
+		fields = []string{"/jobs"}
+	}
+	if len(fields) == 1 || fields[1] == "list" {
+		views := c.jobs.All()
+		if len(views) == 0 {
+			return "No background jobs."
+		}
+		var b strings.Builder
+		b.WriteString("Background jobs:\n")
+		for _, j := range views {
+			label := j.ID
+			if j.Label != "" {
+				label += " (" + j.Label + ")"
+			}
+			fmt.Fprintf(&b, "  %s  %s  %s\n", label, j.Kind, j.Status)
+		}
+		b.WriteString("Use /jobs output <id> to inspect output, /jobs kill <id> to stop a running job.")
+		return strings.TrimRight(b.String(), "\n")
+	}
+	if len(fields) < 3 {
+		return "usage: /jobs [list] | /jobs output <id> | /jobs kill <id>"
+	}
+	id := fields[2]
+	switch fields[1] {
+	case "output", "show":
+		text, status, ok := c.jobs.Output(id)
+		if !ok {
+			return fmt.Sprintf("no background job %q", id)
+		}
+		if strings.TrimSpace(text) == "" {
+			text = "(no new output)"
+		}
+		return fmt.Sprintf("[%s] %s\n%s", id, status, text)
+	case "kill", "cancel", "stop":
+		if c.jobs.Kill(id) {
+			return fmt.Sprintf("Killed background job %q.", id)
+		}
+		return fmt.Sprintf("Background job %q was not running (already finished or unknown).", id)
+	default:
+		return "usage: /jobs [list] | /jobs output <id> | /jobs kill <id>"
+	}
 }
 
 func (c *Controller) modelListText() string {

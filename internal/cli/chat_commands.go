@@ -83,6 +83,14 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 	case "/hooks":
 		m.echoLocalCommand(input)
 		m.runHooksSubcommand(input)
+	case "/jobs":
+		m.echoLocalCommand(input)
+		fields := strings.Fields(input)
+		if len(fields) <= 1 || (len(fields) == 2 && fields[1] == "list") {
+			m.openJobsPicker()
+		} else {
+			m.notice(m.ctrl.JobsText(input))
+		}
 	case "/paste-image":
 		return pasteClipboardImage()
 	case "/output-style", "/output-styles":

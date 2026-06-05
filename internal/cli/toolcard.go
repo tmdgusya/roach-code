@@ -38,11 +38,15 @@ func surfaceWrap(s string, _ int) string {
 // connectorBlock renders lines under the connector: the first carries the rail
 // gutter, the rest align beneath it. Returns "" for no lines.
 func connectorBlock(lines []string) string {
+	return connectorBlockWithPrefix("", lines)
+}
+
+func connectorBlockWithPrefix(prefix string, lines []string) string {
 	if len(lines) == 0 {
 		return ""
 	}
-	indent := strings.Repeat(" ", len([]rune(connector)))
-	out := dim(connector) + lines[0]
+	indent := strings.Repeat(" ", len([]rune(prefix))+len([]rune(connector)))
+	out := dim(prefix+connector) + lines[0]
 	for _, ln := range lines[1:] {
 		out += "\n" + indent + ln
 	}
