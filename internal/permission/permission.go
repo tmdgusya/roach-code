@@ -76,7 +76,7 @@ func ParseRule(s string) (Rule, bool) {
 }
 
 func parseRules(ss []string) []Rule {
-	var out []Rule
+	out := make([]Rule, 0, len(ss))
 	for _, s := range ss {
 		if r, ok := ParseRule(s); ok {
 			out = append(out, r)

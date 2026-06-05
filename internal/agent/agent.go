@@ -602,7 +602,7 @@ type toolCallBatch struct {
 // read the turn's evidence ledger, so every prior call's receipt must be recorded
 // before they run.
 func partitionToolCalls(r *tool.Registry, calls []provider.ToolCall) []toolCallBatch {
-	var batches []toolCallBatch
+	batches := make([]toolCallBatch, 0, len(calls))
 	for i := 0; i < len(calls); {
 		if parallelisable(r, calls[i].Name) {
 			start := i

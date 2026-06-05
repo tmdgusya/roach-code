@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"io"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -15,18 +18,58 @@ import (
 // TestRunStatuslineCmd checks the custom status-line runner: it returns the
 // first stdout line and forwards the JSON payload on stdin.
 func TestRunStatuslineCmd(t *testing.T) {
+	t.Setenv("ROACH_STATUSLINE_HELPER", "1")
+
 	// Multi-line output collapses to the first row.
-	if got := runStatuslineCmd("printf 'row-one\\nrow-two\\n'", "{}"); got != "row-one" {
+	if got := runStatuslineCmd(statuslineHelperCommand("multiline"), "{}"); got != "row-one" {
 		t.Errorf("multi-line output should collapse to the first row, got %q", got)
 	}
 	// The JSON payload is delivered on stdin.
-	if got := runStatuslineCmd("cat", `{"model":"deepseek"}`); got != `{"model":"deepseek"}` {
+	if got := runStatuslineCmd(statuslineHelperCommand("stdin"), `{"model":"deepseek"}`); got != `{"model":"deepseek"}` {
 		t.Errorf("stdin payload not forwarded, got %q", got)
 	}
 	// A failing command yields an empty line, not an error.
-	if got := runStatuslineCmd("exit 3", "{}"); got != "" {
+	if got := runStatuslineCmd(statuslineHelperCommand("fail"), "{}"); got != "" {
 		t.Errorf("failed command should yield empty, got %q", got)
 	}
+}
+
+func TestStatuslineHelperProcess(t *testing.T) {
+	if os.Getenv("ROACH_STATUSLINE_HELPER") != "1" {
+		return
+	}
+	mode := ""
+	for i, arg := range os.Args {
+		if arg == "--" && i+1 < len(os.Args) {
+			mode = os.Args[i+1]
+			break
+		}
+	}
+	switch mode {
+	case "multiline":
+		_, _ = os.Stdout.WriteString("row-one\nrow-two\n")
+	case "stdin":
+		_, _ = io.Copy(os.Stdout, os.Stdin)
+	case "fail":
+		os.Exit(3)
+	default:
+		t.Fatalf("unknown helper mode %q", mode)
+	}
+	os.Exit(0)
+}
+
+func statuslineHelperCommand(mode string) string {
+	if runtime.GOOS == "windows" {
+		return os.Args[0] + " -test.run=TestStatuslineHelperProcess -- " + mode
+	}
+	return shellQuote(os.Args[0]) + " -test.run=TestStatuslineHelperProcess -- " + mode
+}
+
+func shellQuote(s string) string {
+	if runtime.GOOS == "windows" {
+		return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+	}
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 // TestRunStatuslineDisabled confirms no command means no work (nil cmd), without

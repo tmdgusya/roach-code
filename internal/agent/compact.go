@@ -361,7 +361,16 @@ func (a *Agent) summarize(ctx context.Context, region []provider.Message, instru
 
 // renderTranscript flattens messages into a readable transcript for summarization.
 func renderTranscript(msgs []provider.Message) string {
+	// Pre-size the builder to avoid reallocations: content + role labels (~24 bytes each).
+	n := 0
+	for _, m := range msgs {
+		n += len(m.Content) + len(m.Name) + 24
+		for _, tc := range m.ToolCalls {
+			n += len(tc.Name) + len(tc.Arguments) + 24
+		}
+	}
 	var b strings.Builder
+	b.Grow(n)
 	for _, m := range msgs {
 		switch m.Role {
 		case provider.RoleUser:

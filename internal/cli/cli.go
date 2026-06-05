@@ -251,7 +251,28 @@ func runServe(args []string) int {
 	// Use graceful shutdown so SIGINT/SIGTERM drain active connections.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	if err := serve.New(ctrl, bc).RunGraceful(ctx, *addr); err != nil {
+	srv := serve.New(ctrl, bc)
+	// Wire /model switching: rebuild the controller on a different model ref,
+	// carrying the conversation across — same as the TUI's model switch.
+	stepsCopy := *maxSteps
+	srv.SetModelBuilder(func(ref string, carry []provider.Message) (*control.Controller, error) {
+		c, err := setupQuiet(ctx, ref, stepsCopy, true, bc)
+		if err != nil {
+			return nil, err
+		}
+		path := ""
+		if dir := c.SessionDir(); dir != "" {
+			path = agent.NewSessionPath(dir, c.Label())
+		}
+		if len(carry) > 0 {
+			c.Resume(&agent.Session{Messages: carry}, path)
+		} else if path != "" {
+			c.SetSessionPath(path)
+		}
+		c.EnableInteractiveApproval()
+		return c, nil
+	})
+	if err := srv.RunGraceful(ctx, *addr); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 1
 	}

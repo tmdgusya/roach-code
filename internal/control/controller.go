@@ -729,6 +729,12 @@ func (c *Controller) notice(text string) {
 	c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: text})
 }
 
+// Notice emits an informational Notice event. Exported so external frontends
+// (e.g. the HTTP server) can surface messages through the same event stream.
+func (c *Controller) Notice(text string) {
+	c.notice(text)
+}
+
 // Run executes a turn synchronously, returning the agent's error. Used by the
 // headless `roach-code run` path, where the Sink renders to stdout and the caller
 // just needs the exit status — no TurnDone event, no cancel bookkeeping.

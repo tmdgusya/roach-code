@@ -210,7 +210,7 @@ func (s Store) List() []Memory {
 	if err != nil {
 		return nil
 	}
-	var out []Memory
+	out := make([]Memory, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() || e.Name() == indexFile || !strings.HasSuffix(e.Name(), ".md") {
 			continue

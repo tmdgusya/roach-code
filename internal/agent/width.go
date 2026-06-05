@@ -1,23 +1,53 @@
 package agent
 
 import (
-	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
 )
-
-// ansiSGR matches ANSI Select-Graphic-Rendition sequences (\e[…m). Width
-// measurement strips these so styled streamed text still gets counted by its
-// visible column footprint.
-var ansiSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 // visibleWidth returns the column count of s after stripping ANSI SGR codes.
 // Delegates to go-runewidth so emoji, fullwidth forms, and ZWJ sequences all
 // measure correctly — a hand-rolled CJK-only table missed every emoji range
 // and made the streamed-text row count drift on emoji-heavy answers.
 func visibleWidth(s string) int {
-	return runewidth.StringWidth(ansiSGR.ReplaceAllString(s, ""))
+	return runewidth.StringWidth(stripANSI(s))
+}
+
+// stripANSI copies s into a new string with ANSI SGR sequences removed.
+// It walks bytes directly so no regexp is needed.
+func stripANSI(s string) string {
+	var b strings.Builder
+	for len(s) > 0 {
+		if n := skipANSISGR(s); n > 0 {
+			s = s[n:]
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(s)
+		b.WriteRune(r)
+		s = s[size:]
+	}
+	return b.String()
+}
+
+// skipANSISGR returns the byte length of an ANSI Select-Graphic-Rendition
+// sequence (\e[…m) at the start of s, or 0 if s does not begin one.
+func skipANSISGR(s string) int {
+	if len(s) < 2 || s[0] != '\x1b' || s[1] != '[' {
+		return 0
+	}
+	for i := 2; i < len(s); i++ {
+		c := s[i]
+		if (c >= '0' && c <= '9') || c == ';' {
+			continue
+		}
+		if c == 'm' {
+			return i + 1
+		}
+		break
+	}
+	return 0
 }
 
 // streamedRows counts how many rows the cursor has descended after raw text
@@ -31,11 +61,29 @@ func streamedRows(s string, width int) int {
 		width = 80
 	}
 	rows := 0
-	for _, line := range strings.Split(s, "\n") {
-		if w := visibleWidth(line); w > 0 {
+	for len(s) > 0 {
+		// Extract one line (up to '\n'), stripping ANSI inline.
+		var line strings.Builder
+		hasNewline := false
+		for len(s) > 0 {
+			if n := skipANSISGR(s); n > 0 {
+				s = s[n:]
+				continue
+			}
+			r, size := utf8.DecodeRuneInString(s)
+			s = s[size:]
+			if r == '\n' {
+				hasNewline = true
+				break
+			}
+			line.WriteRune(r)
+		}
+		if w := runewidth.StringWidth(line.String()); w > 0 {
 			rows += (w - 1) / width
 		}
+		if hasNewline {
+			rows++ // count the '\n' itself
+		}
 	}
-	rows += strings.Count(s, "\n")
 	return rows
 }

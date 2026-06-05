@@ -159,12 +159,15 @@ func myers(a, b []string) ([]op, bool) {
 	}
 	offset := maxD // shift negative k into a non-negative array index
 	v := make([]int, 2*maxD+1)
+	// Pre-allocate a flat trace buffer so each snapshot is a sub-slice rather
+	// than an independent allocation. Reduces O(D) allocations to O(1).
+	traceBuf := make([]int, 0, (maxD+1)*len(v))
 	var trace [][]int
 
 	for d := 0; d <= maxD; d++ {
-		snapshot := make([]int, len(v))
-		copy(snapshot, v)
-		trace = append(trace, snapshot)
+		start := len(traceBuf)
+		traceBuf = append(traceBuf, v...)
+		trace = append(trace, traceBuf[start:start+len(v)])
 		for k := -d; k <= d; k += 2 {
 			var x int
 			// Pick the move that reaches furthest: down (insert from b) when at
@@ -193,7 +196,8 @@ func myers(a, b []string) ([]op, bool) {
 // then reverses them into forward order.
 func backtrack(trace [][]int, a, b []string, offset int) []op {
 	x, y := len(a), len(b)
-	var ops []op
+	// Worst-case ops: every line deleted from a and every line inserted from b.
+	ops := make([]op, 0, len(a)+len(b))
 	for d := len(trace) - 1; d > 0; d-- {
 		v := trace[d]
 		k := x - y
@@ -321,7 +325,7 @@ type hunk struct{ start, end int }
 // group collects change regions, padding each with up to context equal lines on
 // both sides and merging regions whose padding overlaps, mirroring `diff -u`.
 func group(refs []lineRef, context int) []hunk {
-	var changes []int
+	changes := make([]int, 0, len(refs))
 	for i, r := range refs {
 		if r.op.typ != opEqual {
 			changes = append(changes, i)
@@ -331,7 +335,8 @@ func group(refs []lineRef, context int) []hunk {
 		return nil
 	}
 
-	var hunks []hunk
+	// Worst case: every change is isolated, one hunk per change.
+	hunks := make([]hunk, 0, len(changes))
 	start := max(0, changes[0]-context)
 	end := min(len(refs), changes[0]+context+1)
 	for _, ci := range changes[1:] {

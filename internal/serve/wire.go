@@ -72,6 +72,7 @@ type wireUsage struct {
 	SessionCacheHitTokens  int     `json:"sessionCacheHitTokens"`
 	SessionCacheMissTokens int     `json:"sessionCacheMissTokens"`
 	CostUSD                float64 `json:"costUsd,omitempty"`
+	CostSymbol             string  `json:"costSymbol,omitempty"`
 }
 
 type wireApproval struct {
@@ -139,6 +140,7 @@ func toWire(e event.Event) wireEvent {
 			}
 			if e.Pricing != nil {
 				w.Usage.CostUSD = e.Pricing.Cost(u)
+				w.Usage.CostSymbol = e.Pricing.Symbol()
 			}
 		}
 	case event.ApprovalRequest:

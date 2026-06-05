@@ -86,6 +86,9 @@ const interruptedToolResult = "[no result: the previous turn was interrupted bef
 // pass through unchanged (results stay in call order). Callers send the result;
 // the stored session keeps the original.
 func SanitizeToolPairing(msgs []Message) []Message {
+	if toolPairingClean(msgs) {
+		return msgs
+	}
 	out := make([]Message, 0, len(msgs))
 	for i := 0; i < len(msgs); {
 		m := msgs[i]
@@ -107,6 +110,35 @@ func SanitizeToolPairing(msgs []Message) []Message {
 		i++
 	}
 	return out
+}
+
+// toolPairingClean reports whether msgs already satisfies the tool-call pairing
+// contract with no orphan tool messages and no unanswered assistant tool_calls.
+// It is the fast path that lets SanitizeToolPairing return the original slice
+// without allocating a copy.
+func toolPairingClean(msgs []Message) bool {
+	expectTools := 0
+	for _, m := range msgs {
+		if m.Role == RoleAssistant {
+			if expectTools > 0 {
+				return false // previous assistant's tool_calls not yet answered
+			}
+			expectTools = len(m.ToolCalls)
+			continue
+		}
+		if m.Role == RoleTool {
+			if expectTools == 0 {
+				return false // orphan tool message
+			}
+			expectTools--
+			continue
+		}
+		if expectTools > 0 {
+			return false // assistant tool_calls not followed by enough tool messages
+		}
+		// user/system message
+	}
+	return expectTools == 0
 }
 
 // pairToolResults answers each tool_call with its result, backfilling a

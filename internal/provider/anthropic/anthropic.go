@@ -356,19 +356,19 @@ func (c *client) readStream(resp *http.Response, out chan<- provider.Chunk) {
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		line := bytes.TrimSpace(scanner.Bytes())
 		// SSE carries `event:` and `data:` lines; the data JSON's own `type` field
 		// is authoritative, so we only need the data payloads.
-		if !strings.HasPrefix(line, "data:") {
+		if !bytes.HasPrefix(line, []byte("data:")) {
 			continue
 		}
-		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if data == "" {
+		data := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data:")))
+		if len(data) == 0 {
 			continue
 		}
 
 		var ev streamEvent
-		if err := json.Unmarshal([]byte(data), &ev); err != nil {
+		if err := json.Unmarshal(data, &ev); err != nil {
 			out <- provider.Chunk{Type: provider.ChunkError, Err: fmt.Errorf("%s: decode stream: %w", c.name, err)}
 			return
 		}

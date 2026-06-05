@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -171,26 +172,57 @@ var (
 // It is intentionally lossy — we want to give the model readable text rather
 // than preserve structure for re-rendering.
 func htmlToText(s string) string {
-	s = scriptStyle.ReplaceAllString(s, "")
-	s = htmlComment.ReplaceAllString(s, "")
-	s = anyTag.ReplaceAllString(s, "")
+	b := []byte(s)
+	b = scriptStyle.ReplaceAll(b, nil)
+	b = htmlComment.ReplaceAll(b, nil)
+	b = anyTag.ReplaceAll(b, nil)
+	b = unescapeHTMLEntities(b)
+	b = trailingWS.ReplaceAll(b, []byte("\n"))
+	b = multiBlank.ReplaceAll(b, []byte("\n\n"))
+	return string(bytes.TrimSpace(b))
+}
 
-	// Unescape the entities the model is most likely to encounter. Avoids
-	// pulling in html.UnescapeString just to handle five characters.
-	repl := strings.NewReplacer(
-		"&amp;", "&",
-		"&lt;", "<",
-		"&gt;", ">",
-		"&quot;", `"`,
-		"&#39;", "'",
-		"&apos;", "'",
-		"&nbsp;", " ",
-	)
-	s = repl.Replace(s)
-
-	s = trailingWS.ReplaceAllString(s, "\n")
-	s = multiBlank.ReplaceAllString(s, "\n\n")
-	return s
+// unescapeHTMLEntities replaces the most common HTML entities in a single
+// pass over b, returning a newly allocated slice only when replacements occur.
+func unescapeHTMLEntities(b []byte) []byte {
+	var out []byte
+	i := 0
+	for i < len(b) {
+		if b[i] != '&' {
+			out = append(out, b[i])
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(b) && b[j] != ';' && b[j] != '&' && b[j] != ' ' && b[j] != '\n' && b[j] != '\t' && b[j] != '<' && b[j] != '>' {
+			j++
+		}
+		if j >= len(b) || b[j] != ';' {
+			out = append(out, b[i])
+			i++
+			continue
+		}
+		switch {
+		case bytes.Equal(b[i:j+1], []byte("&amp;")):
+			out = append(out, '&')
+		case bytes.Equal(b[i:j+1], []byte("&lt;")):
+			out = append(out, '<')
+		case bytes.Equal(b[i:j+1], []byte("&gt;")):
+			out = append(out, '>')
+		case bytes.Equal(b[i:j+1], []byte("&quot;")):
+			out = append(out, '"')
+		case bytes.Equal(b[i:j+1], []byte("&#39;")):
+			out = append(out, '\'')
+		case bytes.Equal(b[i:j+1], []byte("&apos;")):
+			out = append(out, '\'')
+		case bytes.Equal(b[i:j+1], []byte("&nbsp;")):
+			out = append(out, ' ')
+		default:
+			out = append(out, b[i:j+1]...)
+		}
+		i = j + 1
+	}
+	return out
 }
 
 func contentTypeShort(ct string) string {

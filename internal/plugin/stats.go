@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"roach-code/internal/config"
@@ -35,6 +36,8 @@ const (
 	// which matches what the plan calls out as the demote signal.
 	defaultDemoteAfter = 3
 )
+
+var statsLocks sync.Map // map[string]*sync.Mutex
 
 // StartupStats is the on-disk record of recent startup durations for one
 // plugin. SamplesMs is oldest→newest (newest appended at the tail); LastSeen
@@ -75,6 +78,10 @@ func RecordStartup(name string, dur time.Duration) error {
 		return nil
 	}
 
+	mu := statsFileLock(path)
+	mu.Lock()
+	defer mu.Unlock()
+
 	stats := loadStats(path) // missing/corrupt → fresh zero value
 	if stats.Version != statsVersion {
 		// Version mismatch: start over rather than try to migrate. The window
@@ -99,6 +106,11 @@ func RecordStartup(name string, dur time.Duration) error {
 		return err
 	}
 	return nil
+}
+
+func statsFileLock(path string) *sync.Mutex {
+	mu, _ := statsLocks.LoadOrStore(path, &sync.Mutex{})
+	return mu.(*sync.Mutex)
 }
 
 // Recommend inspects the recent samples for name and decides whether the

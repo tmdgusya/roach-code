@@ -182,6 +182,9 @@ func hasUnquotedSeq(s, seq string) bool {
 func commandPreview(cmd string) string {
 	cmd = strings.TrimSpace(strings.ReplaceAll(cmd, "\n", " "))
 	const max = 48
+	if len(cmd) <= max {
+		return cmd
+	}
 	r := []rune(cmd)
 	if len(r) > max {
 		return string(r[:max]) + "…"
