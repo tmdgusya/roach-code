@@ -69,6 +69,7 @@ func (m *chatTUI) slashItems() []compItem {
 		{label: "/model", insert: "/model ", hint: i18n.M.CmdModel, descend: true},
 		{label: "/skill", insert: "/skill ", hint: i18n.M.CmdSkill, descend: true},
 		{label: "/hooks", insert: "/hooks ", hint: i18n.M.CmdHooks, descend: true},
+		{label: "/jobs", insert: "/jobs ", hint: i18n.M.CmdJobs, descend: true},
 		{label: "/paste-image", insert: "/paste-image", hint: i18n.M.CmdPasteImage},
 		{label: "/output-style", insert: "/output-style", hint: i18n.M.CmdOutputStyle},
 		{label: "/verbose", insert: "/verbose", hint: i18n.M.CmdVerbose},
@@ -155,6 +156,7 @@ func (m *chatTUI) slashArgItems(val string) ([]compItem, int, bool) {
 	if m.ctrl != nil {
 		data.ConfiguredMCP = m.ctrl.ConfiguredMCPNames()
 		data.DisconnectedMCP = m.ctrl.DisconnectedMCPNames()
+		data.Jobs = m.ctrl.AllJobs()
 	}
 	if m.host != nil {
 		data.ServerNames = m.host.ServerNames()

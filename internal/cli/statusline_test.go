@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"io"
 	"os"
 	"runtime"
@@ -13,6 +14,7 @@ import (
 	"roach-code/internal/control"
 	"roach-code/internal/event"
 	"roach-code/internal/i18n"
+	"roach-code/internal/jobs"
 )
 
 // TestRunStatuslineCmd checks the custom status-line runner: it returns the
@@ -152,6 +154,41 @@ func TestStatuslineExplicitEffortUsesAccentColor(t *testing.T) {
 	// Explicit effort uses the active theme's accent color (copper-coral #d97757 for graphite).
 	if !strings.Contains(content, "\x1b[38;2;217;119;87m") && !strings.Contains(content, "\x1b[38;5;173m") {
 		t.Fatalf("explicit effort should use graphite accent color, got:\n%q", content)
+	}
+}
+
+func TestStatuslineShowsRunningAndRetainedDoneJobs(t *testing.T) {
+	i18n.DetectLanguage("en")
+
+	jm := jobs.NewManager(event.Discard)
+	running := jm.Start("task", "scan", func(ctx context.Context, _ io.Writer) (string, error) {
+		<-ctx.Done()
+		return "", ctx.Err()
+	})
+	done := jm.Start("task", "done", func(context.Context, io.Writer) (string, error) {
+		return "answer", nil
+	})
+	_ = jm.Wait(context.Background(), []string{done.ID}, 0)
+
+	ctrl := control.New(control.Options{Jobs: jm})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	plain := bottomStatusPlain(next.(chatTUI).View().Content)
+	if !strings.Contains(plain, "1 job") {
+		t.Fatalf("running jobs should take priority in status line:\n%s", plain)
+	}
+	if strings.Contains(plain, "done") {
+		t.Fatalf("running jobs should not be mixed with terminal done count:\n%s", plain)
+	}
+
+	if !jm.Kill(running.ID) {
+		t.Fatal("expected running job to be killable")
+	}
+	_ = jm.Wait(context.Background(), []string{running.ID}, 0)
+	next, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	plain = bottomStatusPlain(next.(chatTUI).View().Content)
+	if !strings.Contains(plain, "2 jobs done") {
+		t.Fatalf("retained terminal jobs should remain visible in status line:\n%s", plain)
 	}
 }
 

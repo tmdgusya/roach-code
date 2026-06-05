@@ -27,7 +27,11 @@ func (m *chatTUI) resetToolStreamBuf() {
 // the given width. It is the one-line form of the connector block; the
 // multi-line streamToolOutput path builds its own slice and does not use it.
 func connectorLine(text string, width int) string {
-	return surfaceWrap(connectorBlock([]string{text}), width)
+	return connectorLineWithPrefix("", text, width)
+}
+
+func connectorLineWithPrefix(prefix, text string, width int) string {
+	return surfaceWrap(connectorBlockWithPrefix(prefix, []string{text}), width)
 }
 
 // streamToolOutput appends a chunk of a running tool's output and re-renders its
@@ -60,11 +64,12 @@ func (m *chatTUI) streamToolOutput(id, chunk string) {
 	if m.toolPartial != "" {
 		vis = append(append([]string{}, m.toolTail...), m.toolPartial)
 	}
+	prefixWidth := len([]rune(m.toolStreamPrefix))
 	lines := make([]string, len(vis))
 	for i, ln := range vis {
-		lines[i] = dim(clampPlain(ln, m.width-len([]rune(connector))))
+		lines[i] = dim(clampPlain(ln, m.width-prefixWidth-len([]rune(connector))))
 	}
-	m.transcript[m.toolStreamIdx] = surfaceWrap(connectorBlock(lines), m.width)
+	m.transcript[m.toolStreamIdx] = surfaceWrap(connectorBlockWithPrefix(m.toolStreamPrefix, lines), m.width)
 	m.transcriptDirty = true
 }
 
@@ -100,11 +105,12 @@ func (m *chatTUI) collapseToolOutput(id string) {
 			m.transcript[m.toolStreamIdx] = ""
 		}
 	} else {
-		m.transcript[m.toolStreamIdx] = connectorLine(dim(fmt.Sprintf("%d lines", n)), m.width)
+		m.transcript[m.toolStreamIdx] = connectorLineWithPrefix(m.toolStreamPrefix, dim(fmt.Sprintf("%d lines", n)), m.width)
 	}
 	m.transcriptDirty = true
 	m.toolStreamIdx = -1
 	m.toolStreamID = ""
+	m.toolStreamPrefix = ""
 	m.resetToolStreamBuf()
 }
 
@@ -117,15 +123,20 @@ var toolWorkingFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦"
 // second; if the tool later streams output, streamToolOutput reuses the same
 // block; collapseToolOutput closes it on the result.
 func (m *chatTUI) beginToolRunning(id string) {
+	m.beginToolRunningWithPrefix(id, "")
+}
+
+func (m *chatTUI) beginToolRunningWithPrefix(id, prefix string) {
 	if id == "" {
 		return
 	}
 	m.toolStreamID = id
+	m.toolStreamPrefix = prefix
 	m.resetToolStreamBuf()
 	m.toolStreamStart = time.Now()
 	m.toolStreamFrame = 0
 	m.toolStreamIdx = len(m.transcript)
-	m.commitLine(connectorLine(dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, toolWorkingFrames[0], 0)), m.width))
+	m.commitLine(connectorLineWithPrefix(prefix, dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, toolWorkingFrames[0], 0)), m.width))
 }
 
 // tickToolRunning re-renders the working line of a tool that's dispatched but
@@ -137,6 +148,6 @@ func (m *chatTUI) tickToolRunning() {
 	m.toolStreamFrame++
 	frame := toolWorkingFrames[m.toolStreamFrame%len(toolWorkingFrames)]
 	secs := int(time.Since(m.toolStreamStart).Seconds())
-	m.transcript[m.toolStreamIdx] = connectorLine(dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, secs)), m.width)
+	m.transcript[m.toolStreamIdx] = connectorLineWithPrefix(m.toolStreamPrefix, dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, secs)), m.width)
 	m.transcriptDirty = true
 }

@@ -122,14 +122,27 @@ type chatTUI struct {
 	// toolLineCount feeds the collapse summary.
 	toolStreamIdx int
 	toolStreamID  string
-	toolTail      []string
-	toolPartial   string
-	toolLineCount int
+	// toolStreamPrefix is prepended to the output rail for nested subagent tools,
+	// so child tool output stays visually attached to the subagent row.
+	toolStreamPrefix string
+	toolTail         []string
+	toolPartial      string
+	toolLineCount    int
 	// readRollupIdx points at the visible read_file card for a consecutive run of
 	// Read calls. Subsequent read_file dispatches rewrite that one line with the
 	// latest path instead of stacking multiple nearly-identical Read cards.
 	// -1 when the current visible sequence is not a read_file run.
 	readRollupIdx int
+	// readRollupParent scopes the read_file rollup. Top-level reads and each
+	// subagent parent keep independent visible rows instead of overwriting one
+	// another.
+	readRollupParent string
+	// subagents tracks visible task/run_skill subagent invocations by parent tool
+	// call ID. Qwen keeps an always-on live roster plus a terminal scrollback
+	// summary; roach-code's TUI mirrors that in the transcript by grouping child
+	// tool calls under this parent and replacing the parent line with a terminal
+	// summary when the run finishes.
+	subagents map[string]*subagentRun
 	// toolStreamStart / toolStreamFrame drive the "╰─ working · Ns" line shown
 	// under a dispatched tool that hasn't produced output yet, so a slow tool
 	// (e.g. codegraph_context) reads as making progress rather than frozen.
@@ -181,6 +194,9 @@ type chatTUI struct {
 	// (nil when none). While set, the controller's run goroutine is blocked
 	// awaiting ctrl.Approve and key input is captured to answer it.
 	pendingApproval *event.Approval
+	// pendingApprovalParent is the subagent parent tool call that requested the
+	// current approval, when the gate came from inside a subagent.
+	pendingApprovalParent string
 	// approvalCursor is the highlighted choice row (0 allow once · 1 allow session ·
 	// 2 deny) while pendingApproval is set. It defaults to Deny for destructive
 	// calls so a reflexive Enter denies them; see handleApprovalKey.
@@ -201,7 +217,10 @@ type chatTUI struct {
 	// resumePick is the interactive "/resume" session picker overlay. Non-nil
 	// while the user browses saved sessions with ↑/↓ and confirms with Enter.
 	resumePick *resumePicker
-	lastEsc    time.Time
+	// jobsPick is the interactive "/jobs" background-task roster. It mirrors
+	// Qwen's task dialog within roach-code's existing bottom-panel UI.
+	jobsPick *jobsPicker
+	lastEsc  time.Time
 
 	// lastCtrlCAt records when Ctrl+C was pressed while idle on an empty
 	// composer, enabling a "press again to quit" confirmation pattern (1.5s
@@ -576,6 +595,10 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.resumePick != nil {
 			return m.handleResumePickerKey(msg)
 		}
+		// The jobs picker is modal while open: keys navigate, inspect, or kill jobs.
+		if m.jobsPick != nil {
+			return m.handleJobsPickerKey(msg)
+		}
 		// A pending tool approval is modal: keystrokes answer it (y/a/n, Enter,
 		// Esc) rather than reaching the input.
 		if m.pendingApproval != nil {
@@ -620,6 +643,10 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "down":
 			if m.state != tuiRunning && m.recallSubmittedInput(1) {
+				return m, nil
+			}
+			if m.state != tuiRunning && m.ctrl != nil && strings.TrimSpace(m.input.Value()) == "" && len(m.ctrl.AllJobs()) > 0 {
+				m.openJobsPicker()
 				return m, nil
 			}
 		default:
@@ -1062,10 +1089,12 @@ func (m chatTUI) View() tea.View {
 	// Each pinned panel appends itself and adds its rows via appendPanel; the row
 	// formula lives once in panelRowCount so this layout and bottomRows can't drift.
 	appendPanel(&parts, &rowsAboveBox, m.renderTodoPanel())
+	appendPanel(&parts, &rowsAboveBox, m.renderSubagentPanel())
 	appendPanel(&parts, &rowsAboveBox, m.renderApprovalBanner())
 	appendPanel(&parts, &rowsAboveBox, m.renderChooser())
 	appendPanel(&parts, &rowsAboveBox, m.renderRewind())
 	appendPanel(&parts, &rowsAboveBox, m.renderResumePicker())
+	appendPanel(&parts, &rowsAboveBox, m.renderJobsPicker())
 	appendPanel(&parts, &rowsAboveBox, m.renderCompletion())
 	// Layout: the working spinner (when running) above the box; the input box; then
 	// the two status rows (line 1 = mode + shortcuts/state, line 2 = live data).

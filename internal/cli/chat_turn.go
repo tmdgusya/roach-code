@@ -166,6 +166,10 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 			break
 		}
 		m.finalizeStreamed()
+		if e.Tool.ParentID != "" {
+			m.renderSubagentChildDispatch(e.Tool)
+			break
+		}
 		switch e.Tool.Name {
 		case "todo_write":
 			m.clearReadRollup()
@@ -174,11 +178,12 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 			m.todoArgs = e.Tool.Args
 		case "read_file":
 			line := surfaceWrap(toolCard(e.Tool.Name, e.Tool.Args, m.width), m.width)
-			if m.readRollupIdx >= 0 && m.readRollupIdx < len(m.transcript) {
+			if m.readRollupIdx >= 0 && m.readRollupParent == "" && m.readRollupIdx < len(m.transcript) {
 				m.replaceTranscriptLine(m.readRollupIdx, line)
 			} else {
 				m.commitSpacer()
 				m.readRollupIdx = len(m.transcript)
+				m.readRollupParent = ""
 				m.commitLine(line)
 			}
 			m.beginToolRunning(e.Tool.ID)
@@ -192,6 +197,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 				break
 			}
 			m.commitLine(surfaceWrap(toolCard(e.Tool.Name, e.Tool.Args, m.width), m.width))
+			m.rememberSubagentDispatch(e.Tool)
 			m.beginToolRunning(e.Tool.ID)
 		}
 
@@ -203,6 +209,20 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		// call surfaces a red "● Verb ⊘ <reason>" card. A live-output block (bash)
 		// collapses to a one-line "╰─ N lines" summary first.
 		m.collapseToolOutput(e.Tool.ID)
+		if e.Tool.ParentID != "" {
+			if e.Tool.Err != "" {
+				m.clearReadRollup()
+				m.finalizeStreamed()
+				m.commitLine(surfaceWrap("  │ "+red("●")+" "+bold(toolDisplayName(e.Tool.Name))+" "+red("⊘ "+e.Tool.Err), m.width))
+			}
+			break
+		}
+		if isSubagentRootTool(e.Tool.Name) {
+			m.clearReadRollup()
+			m.finalizeStreamed()
+			m.summarizeSubagentResult(e.Tool)
+			break
+		}
 		if e.Tool.Err != "" {
 			m.clearReadRollup()
 			m.finalizeStreamed()
@@ -211,6 +231,12 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 
 	case event.Usage:
 		m.clearReadRollup()
+		if e.ParentID != "" {
+			if e.Usage != nil {
+				m.recordSubagentUsage(e.ParentID, e.Usage.TotalTokens)
+			}
+			break
+		}
 		if e.Usage != nil {
 			m.turnTokens += e.Usage.CompletionTokens
 		}
@@ -258,6 +284,8 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		// serialises them), so a plain field holds the current one.
 		a := e.Approval
 		m.pendingApproval = &a
+		m.pendingApprovalParent = e.ParentID
+		m.markSubagentAwaitingApproval(e.ParentID, a)
 		// Highlight Deny by default for destructive calls (so a reflexive Enter
 		// denies); benign reads and the plan gate default to Allow-once.
 		m.approvalCursor = 2

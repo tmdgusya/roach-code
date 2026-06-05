@@ -305,6 +305,22 @@ func (m *Manager) Running() []View {
 	return out
 }
 
+// All returns a snapshot of every retained job, running or terminal, in start
+// order. It backs user-facing job management surfaces; unlike Output, it never
+// consumes buffered output.
+func (m *Manager) All() []View {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]View, 0, len(m.order))
+	for _, id := range m.order {
+		j := m.jobs[id]
+		j.mu.Lock()
+		out = append(out, View{ID: j.ID, Kind: j.Kind, Label: j.Label, Status: string(j.status), StartedAt: j.startedAt})
+		j.mu.Unlock()
+	}
+	return out
+}
+
 // DrainCompletedNote returns (and clears) a one-line summary of jobs that
 // finished since the last drain, for the controller to fold into the next turn
 // so the model learns of completions. "" when nothing finished.

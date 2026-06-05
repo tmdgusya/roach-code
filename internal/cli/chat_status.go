@@ -169,17 +169,34 @@ func formatCost(c float64) string {
 	return fmt.Sprintf("%.2f", c)
 }
 
-// jobsTag shows the count of running background jobs in the status line. Job
-// start/finish emit Notices that arrive on eventCh and re-render the frame, so
-// the count stays current without a dedicated tick.
+// jobsTag mirrors Qwen's background-task pill in the built-in status line:
+// active jobs take priority, while retained terminal jobs leave a quiet "done"
+// affordance so /jobs remains discoverable after work finishes.
 func (m chatTUI) jobsTag() string {
-	n := len(m.ctrl.Jobs())
-	if n == 0 {
+	if m.ctrl == nil {
 		return ""
 	}
-	// Plain "N jobs" — no glyph (⚙ has an emoji-presentation variant; technical
-	// glyphs like ⌁ aren't reliably in the terminal font). Calm and bulletproof.
-	return themeFg(activeCLITheme.faint, fmt.Sprintf("%d jobs", n))
+	views := m.ctrl.AllJobs()
+	if len(views) == 0 {
+		return ""
+	}
+	running := 0
+	for _, j := range views {
+		if j.Status == "running" {
+			running++
+		}
+	}
+	if running > 0 {
+		return themeFg(activeCLITheme.faint, fmt.Sprintf("%d %s", running, plural(running, "job", "jobs")))
+	}
+	return themeFg(activeCLITheme.faint, fmt.Sprintf("%d %s done", len(views), plural(len(views), "job", "jobs")))
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 func (m chatTUI) modelTag() string {

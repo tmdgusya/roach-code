@@ -111,6 +111,7 @@ input,textarea{font:inherit;color:inherit}
 
 /* card (v1 pattern) */
 .card{background:var(--card);border-radius:var(--radius-lg);overflow:hidden;font-size:14px;box-shadow:var(--shadow-sm);margin:8px auto;transition:border-color .18s ease}
+.card--child{margin:6px 0 6px 16px;border-left:2px solid var(--border);box-shadow:none}
 .card-head{display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:13px;color:var(--fg-2);cursor:pointer;user-select:none;background:var(--card);transition:background .18s ease}
 .card-head:hover{background:var(--card-hover)}
 .card-head .ico{width:18px;height:18px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;background:var(--panel-2);color:var(--fg-2);flex-shrink:0;font-size:10px}
@@ -121,6 +122,8 @@ input,textarea{font:inherit;color:inherit}
 .card[data-open="false"] .card-head .chev{transform:rotate(-90deg)}
 .card-body{border-top:1px solid var(--border);background:var(--bg-2);padding:8px 12px;font-family:var(--mono);font-size:12px;color:var(--fg-2);white-space:pre-wrap;word-break:break-word;max-height:240px;overflow-y:auto;line-height:1.55}
 .card-body:empty{display:none}
+.card-children{border-top:1px dashed var(--border);padding:4px 10px 8px;background:var(--bg-2)}
+.card-children:empty{display:none}
 .card[data-tone="success"] .card-head .ico{background:var(--success-soft);color:var(--success)}
 .card[data-tone="danger"] .card-head .ico{background:var(--danger-soft);color:var(--danger)}
 .card[data-tone="accent"] .card-head .ico{background:var(--accent-soft);color:var(--accent)}
@@ -404,6 +407,7 @@ const SLASH_CMDS = [
   {cmd:'mcp',desc:'MCP servers'},
   {cmd:'skill',desc:'Skills'},
   {cmd:'hooks',desc:'Hooks'},
+  {cmd:'jobs',desc:'Background jobs'},
   {cmd:'memory',desc:'Show memory'},
   {cmd:'forget',desc:'Forget memory'},
   {cmd:'thinking',desc:'Thinking effort'},
@@ -441,6 +445,12 @@ function setRunning(on) {
     turnInfo.textContent=fmtElapsed(ms)+tok;
   },1000);} else {clearInterval(tickTimer);turnInfo.textContent='';}
 }
+function jobsLabel(jobs){
+  if(!jobs||jobs.length===0)return '';
+  const running=jobs.filter(j=>j.status==='running').length;
+  if(running>0)return running+' '+(running===1?'job':'jobs');
+  return jobs.length+' '+(jobs.length===1?'job':'jobs')+' done';
+}
 
 // ── messages ──
 function addUserMsg(text) { hideWelcome(); const d=el('div','msg msg--user'); d.appendChild(el('span','msg__caret','›')); d.appendChild(el('div','msg__text',text)); log.appendChild(d); stickToBottom=true; scrollDown(true); currentMsg=null;currentText=null;currentReasoning=null; }
@@ -455,20 +465,68 @@ function appendReasoning(t) { const m=ensureMsg(); if(!currentReasoning){const w
 function finalizeMsg() { renderCurrent(); if(currentMsg){const c=currentMsg.querySelector('.cursor');if(c)c.remove();} currentMsg=null;currentText=null;currentReasoning=null; currentRaw=''; }
 
 // ── tool cards (v1 pattern) ──
+function isSubagentRootTool(name){return ['task','explore','research','review','security_review'].includes(name);}
+function taskLabel(tool){
+  if(!tool.args)return tool.name;
+  try{
+    const a=JSON.parse(tool.args);
+    return a.description||a.task||a.name||tool.name;
+  }catch(_){return tool.name;}
+}
+function isBackgroundTask(tool){
+  if(!tool.args)return false;
+  try{return JSON.parse(tool.args).run_in_background===true;}catch(_){return false;}
+}
+function isCancelledError(err){return /context canceled|cancelled|canceled/i.test(err||'');}
+function recordSubagentUsage(parentId,totalTokens){
+  if(!parentId||!totalTokens)return;
+  const card=toolCards[parentId]; if(!card)return;
+  card.dataset.tokens=String((Number(card.dataset.tokens)||0)+Number(totalTokens));
+}
+function markSubagentApproval(parentId,a){
+  if(!parentId)return;
+  const card=toolCards[parentId]; if(!card)return;
+  card.dataset.activity='Awaiting approval '+a.tool+(a.subject?' '+a.subject:'');
+}
+function ensureChildren(card){
+  let kids=card.querySelector(':scope > .card-children');
+  if(!kids){kids=el('div','card-children');card.appendChild(kids);}
+  return kids;
+}
 function renderToolDispatch(tool) {
   hideWelcome(); const card=el('div','card'); card.id='tool-'+tool.id; card.dataset.open='false'; card.dataset.tone='accent';
+  if(tool.parentId)card.classList.add('card--child');
+  card.dataset.started=String(Date.now()); card.dataset.toolCount='0'; card.dataset.tokens='0'; card.dataset.label=taskLabel(tool); card.dataset.background=isBackgroundTask(tool)?'true':'false';
   const head=el('div','card-head');
   head.innerHTML='<span class="ico spin"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/></svg></span><span class="name">'+escHtml(tool.name)+'</span>'+(tool.args?'<span class="subject">'+escHtml(tool.args.slice(0,80))+'</span>':'')+'<span class="grow"></span><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>';
   const body=el('div','card-body'); body.style.display='none';
   head.onclick=()=>{const open=card.dataset.open==='true';card.dataset.open=open?'false':'true';body.style.display=open?'none':'';};
-  card.appendChild(head);card.appendChild(body);log.appendChild(card);toolCards[tool.id]=card;scrollDown();
+  card.appendChild(head);card.appendChild(body);
+  if(tool.parentId&&toolCards[tool.parentId]){
+    const parent=toolCards[tool.parentId]; parent.dataset.toolCount=String((Number(parent.dataset.toolCount)||0)+1);
+    ensureChildren(parent).appendChild(card);
+  }else{
+    log.appendChild(card);
+  }
+  toolCards[tool.id]=card;scrollDown();
 }
 function renderToolResult(tool) {
   const card=toolCards[tool.id]; if(!card)return;
   const ico=card.querySelector('.ico'); if(ico){ico.className='ico';ico.innerHTML=tool.err?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>':'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';}
   card.dataset.tone=tool.err?'danger':'success';
+  if(isSubagentRootTool(tool.name)){
+    const elapsed=fmtElapsed(Date.now()-(Number(card.dataset.started)||Date.now()));
+    const count=Number(card.dataset.toolCount)||0;
+    const tokens=Number(card.dataset.tokens)||0;
+    const head=card.querySelector('.card-head');
+    const bg=card.dataset.background==='true';
+    const cancelled=isCancelledError(tool.err);
+    const reason=tool.err?' · '+(cancelled?'cancelled':tool.err):'';
+    const tokenText=tokens>0?' · '+fmtTok(tokens)+' tokens':'';
+    if(head)head.innerHTML='<span class="ico">'+(tool.err?'✕':(bg?'○':'✓'))+'</span><span class="name">'+escHtml(tool.name)+'</span><span class="subject">'+escHtml(card.dataset.label||tool.name)+' · '+count+' tools · '+elapsed+tokenText+(bg?' · background':'')+escHtml(reason)+'</span><span class="grow"></span><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>';
+  }
   if(tool.err){card.appendChild(el('div','err-body',tool.err));}
-  else if(tool.output){const body=card.querySelector('.card-body');if(body)body.textContent=tool.output.slice(0,2000)+(tool.truncated?'\n...[truncated]':'');}
+  else if(tool.output&&!isSubagentRootTool(tool.name)){const body=card.querySelector('.card-body');if(body)body.textContent=tool.output.slice(0,2000)+(tool.truncated?'\n...[truncated]':'');}
   scrollDown();
 }
 function renderToolProgress(tool) {
@@ -483,7 +541,8 @@ function renderToolProgress(tool) {
 // ── approval ──
 function showApproval(a) {
   const d=el('div','approval');
-  d.innerHTML='<div class="approval__header"><svg class="approval__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span class="approval__title">Approval Required</span></div><div class="approval__subject">'+escHtml(a.tool)+(a.subject?' — '+escHtml(a.subject):'')+'</div><div class="approval__actions"><button class="approval__btn approval__btn--allow" data-allow="true" data-session="false"><span class="approval__key">Y</span> Allow</button><button class="approval__btn approval__btn--allow" data-allow="true" data-session="true"><span class="approval__key">A</span> Session</button><button class="approval__btn approval__btn--deny" data-allow="false"><span class="approval__key">N</span> Deny</button></div>';
+  const parent=a.parentId&&toolCards[a.parentId]?toolCards[a.parentId].dataset.label:'';
+  d.innerHTML='<div class="approval__header"><svg class="approval__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span class="approval__title">Approval Required</span></div><div class="approval__subject">'+escHtml(a.tool)+(a.subject?' — '+escHtml(a.subject):'')+(parent?' · requested by '+escHtml(parent):'')+'</div><div class="approval__actions"><button class="approval__btn approval__btn--allow" data-allow="true" data-session="false"><span class="approval__key">Y</span> Allow</button><button class="approval__btn approval__btn--allow" data-allow="true" data-session="true"><span class="approval__key">A</span> Session</button><button class="approval__btn approval__btn--deny" data-allow="false"><span class="approval__key">N</span> Deny</button></div>';
   log.appendChild(d);scrollDown();
   d.querySelectorAll('.approval__btn').forEach(btn=>{btn.onclick=()=>{post('/approve',{id:a.id,allow:btn.dataset.allow==='true',session:btn.dataset.session==='true'});d.remove();};});
   const onkey=e=>{if(e.key==='y'||e.key==='1'){post('/approve',{id:a.id,allow:true,session:false});d.remove();document.removeEventListener('keydown',onkey);}else if(e.key==='a'||e.key==='2'){post('/approve',{id:a.id,allow:true,session:true});d.remove();document.removeEventListener('keydown',onkey);}else if(e.key==='n'||e.key==='3'){post('/approve',{id:a.id,allow:false,session:false});d.remove();document.removeEventListener('keydown',onkey);}};
@@ -635,6 +694,7 @@ es.onmessage=ev=>{
     case 'tool_result': if(e.tool)renderToolResult(e.tool); break;
     case 'tool_progress': if(e.tool)renderToolProgress(e.tool); break;
     case 'usage':
+      if(e.usage&&e.parentId){recordSubagentUsage(e.parentId,e.usage.totalTokens||0);break;}
       if(e.usage){turnTokens=e.usage.completionTokens||0;
         const strip=el('div','metric-strip');
         [{l:'Total',v:fmtTok(e.usage.totalTokens),c:''},{l:'In',v:fmtTok(e.usage.promptTokens),c:'acc'},{l:'Out',v:fmtTok(e.usage.completionTokens),c:'ok'}].forEach(it=>{
@@ -646,7 +706,7 @@ es.onmessage=ev=>{
       } break;
     case 'notice': log.appendChild(el('div','notice'+(e.level==='warn'?' notice--warn':''),(e.level==='warn'?'! ':'')+(e.text||'')));scrollDown();break;
     case 'phase': finalizeMsg(); log.appendChild(el('div','phase',e.text||''));scrollDown();break;
-    case 'approval_request': if(e.approval)showApproval(e.approval); break;
+    case 'approval_request': if(e.approval){markSubagentApproval(e.parentId,e.approval);showApproval(e.approval);} break;
     case 'ask_request': if(e.ask)showAsk(e.ask); break;
     case 'compaction_started': showCompaction({trigger:e.compaction?.trigger}); break;
     case 'compaction_done': showCompaction(e.compaction||{}); break;
@@ -671,6 +731,7 @@ function fetchStatus(){
     else if(s.lastUsage?.costUsd!=null)$('#sm-cost').textContent=sym+s.lastUsage.costUsd.toFixed(4);
     if(s.balance?.display)$('#sm-balance').textContent=s.balance.display;
     if(s.balance?.display)balanceInfo.textContent='💰 '+s.balance.display;
+    if(!running)turnInfo.textContent=jobsLabel(s.jobs);
   }).catch(()=>{});
 }
 setInterval(fetchStatus,30000);

@@ -52,6 +52,14 @@ func (m *chatTUI) replaceTranscriptLine(idx int, s string) {
 
 func (m *chatTUI) clearReadRollup() {
 	m.readRollupIdx = -1
+	m.readRollupParent = ""
+}
+
+func (m *chatTUI) clearReadRollupFor(parentID string) {
+	if m.readRollupParent == parentID {
+		return
+	}
+	m.clearReadRollup()
 }
 
 // commitLine queues one finalized block for the next scrollback flush.
@@ -92,18 +100,20 @@ func appendPanel(parts *[]string, rows *int, s string) {
 }
 
 // bottomRows is the terminal-row height of the pinned bottom region: any open
-// panels (todo / approval / chooser / rewind / resume-picker / completion), the
-// input box (its line count plus top+bottom border), and the two fixed status
-// rows. The panel set and order MUST match the appendPanel calls in View, so the
-// transcript viewport (sized as height - bottomRows) leaves room for exactly what
-// is drawn beneath it — when only View counted the resume picker the viewport ran
-// one panel too tall while "/resume" was open.
+// panels (todo / approval / chooser / rewind / resume-picker / jobs picker /
+// completion), the input box (its line count plus top+bottom border), and the two
+// fixed status rows. The panel set and order MUST match the appendPanel calls in
+// View, so the transcript viewport (sized as height - bottomRows) leaves room for
+// exactly what is drawn beneath it — when only View counted the resume picker the
+// viewport ran one panel too tall while "/resume" was open.
 func (m chatTUI) bottomRows() int {
 	rows := panelRowCount(m.renderTodoPanel()) +
+		panelRowCount(m.renderSubagentPanel()) +
 		panelRowCount(m.renderApprovalBanner()) +
 		panelRowCount(m.renderChooser()) +
 		panelRowCount(m.renderRewind()) +
 		panelRowCount(m.renderResumePicker()) +
+		panelRowCount(m.renderJobsPicker()) +
 		panelRowCount(m.renderCompletion())
 	if m.state == tuiRunning {
 		rows++ // the working spinner line above the box

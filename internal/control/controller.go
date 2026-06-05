@@ -1588,6 +1588,15 @@ func (c *Controller) Jobs() []jobs.View {
 	return c.jobs.Running()
 }
 
+// AllJobs returns every retained background job for management surfaces such as
+// /jobs completion and listings.
+func (c *Controller) AllJobs() []jobs.View {
+	if c.jobs == nil {
+		return nil
+	}
+	return c.jobs.All()
+}
+
 // SetBypass turns YOLO/bypass mode on or off for the session: while on, every
 // approval prompt is auto-allowed (writers and bash run without asking). Deny
 // rules still block. Runtime-only — never written to config.
@@ -1727,6 +1736,7 @@ func (g gateApprover) Approve(ctx context.Context, tool, subject string, args js
 // short-circuits. promptMu serialises outstanding prompts.
 func (c *Controller) requestApproval(ctx context.Context, tool, subject string) (bool, bool, error) {
 	key := tool + "\x00" + subject
+	parentID, _, _, _ := agent.CallContext(ctx)
 
 	c.mu.Lock()
 	// YOLO/bypass and goal-loop progress auto-allow every approval without
@@ -1753,7 +1763,7 @@ func (c *Controller) requestApproval(ctx context.Context, tool, subject string) 
 	c.approvals[id] = reply
 	c.mu.Unlock()
 
-	c.sink.Emit(event.Event{Kind: event.ApprovalRequest, Approval: event.Approval{ID: id, Tool: tool, Subject: subject}})
+	c.sink.Emit(event.Event{Kind: event.ApprovalRequest, ParentID: parentID, Approval: event.Approval{ID: id, Tool: tool, Subject: subject}})
 	// The agent now needs the user's attention; a Notification hook can ping an
 	// external channel (desktop notice, phone) while the run blocks on the reply.
 	if subject != "" {

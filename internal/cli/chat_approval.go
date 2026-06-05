@@ -30,6 +30,7 @@ func (m chatTUI) handleApprovalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.ctrl.Approve(m.pendingApproval.ID, allow, session)
 		m.pendingApproval = nil
+		m.pendingApprovalParent = ""
 		return m, nil // the next ApprovalRequest / event arrives on eventCh
 	}
 	switch msg.String() {
@@ -122,6 +123,9 @@ func (m chatTUI) renderApprovalBanner() string {
 		}
 	}
 	// Source / intent detail (dim).
+	if label := m.subagentLabelFor(m.pendingApprovalParent); label != "" {
+		lines = append(lines, "  "+dim("requested by "+label))
+	}
 	for _, d := range strings.Split(detail, "\n") {
 		if d != "" {
 			lines = append(lines, "  "+dim(d))

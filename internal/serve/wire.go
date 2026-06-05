@@ -11,6 +11,7 @@ type wireEvent struct {
 	Kind       string          `json:"kind"`
 	Text       string          `json:"text,omitempty"`
 	Reasoning  string          `json:"reasoning,omitempty"`
+	ParentID   string          `json:"parentId,omitempty"`
 	Level      string          `json:"level,omitempty"`
 	Tool       *wireTool       `json:"tool,omitempty"`
 	Usage      *wireUsage      `json:"usage,omitempty"`
@@ -76,9 +77,10 @@ type wireUsage struct {
 }
 
 type wireApproval struct {
-	ID      string `json:"id"`
-	Tool    string `json:"tool"`
-	Subject string `json:"subject"`
+	ID       string `json:"id"`
+	Tool     string `json:"tool"`
+	Subject  string `json:"subject"`
+	ParentID string `json:"parentId,omitempty"`
 }
 
 // kindNames maps the event.Kind enum to stable wire strings.
@@ -115,7 +117,7 @@ func toWireAsk(a event.Ask) *wireAsk {
 
 // toWire converts an event.Event into its JSON wire form.
 func toWire(e event.Event) wireEvent {
-	w := wireEvent{Kind: kindNames[e.Kind], Text: e.Text, Reasoning: e.Reasoning}
+	w := wireEvent{Kind: kindNames[e.Kind], Text: e.Text, Reasoning: e.Reasoning, ParentID: e.ParentID}
 	switch e.Kind {
 	case event.Notice:
 		if e.Level == event.LevelWarn {
@@ -144,7 +146,7 @@ func toWire(e event.Event) wireEvent {
 			}
 		}
 	case event.ApprovalRequest:
-		w.Approval = &wireApproval{ID: e.Approval.ID, Tool: e.Approval.Tool, Subject: e.Approval.Subject}
+		w.Approval = &wireApproval{ID: e.Approval.ID, Tool: e.Approval.Tool, Subject: e.Approval.Subject, ParentID: e.ParentID}
 	case event.AskRequest:
 		w.Ask = toWireAsk(e.Ask)
 	case event.CompactionStarted, event.CompactionDone:

@@ -173,6 +173,11 @@ type Event struct {
 	Tool      Tool              // ToolDispatch / ToolResult
 	Usage     *provider.Usage   // Usage
 	Pricing   *provider.Pricing // Usage: for cost display (nil = omit cost)
+	// ParentID, when set on non-tool events such as Usage, associates the event
+	// with the parent tool call that spawned it. Subagent usage uses this so
+	// frontends can show per-agent token counts without mixing them into the
+	// parent turn's status line.
+	ParentID string
 	// SessionHit/SessionMiss carry cumulative cache tokens across the whole
 	// session (Usage events only), so a frontend can show the aggregate hit-rate
 	// — which doesn't crater on a short turn or after compaction — alongside

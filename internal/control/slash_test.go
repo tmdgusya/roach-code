@@ -3,6 +3,7 @@ package control
 import (
 	"testing"
 
+	"roach-code/internal/jobs"
 	"roach-code/internal/skill"
 )
 
@@ -30,6 +31,7 @@ func TestSlashArgItems(t *testing.T) {
 		DisconnectedMCP: []string{"optional"},
 		ModelRefs:       []string{"deepseek-flash/deepseek-v4-flash", "deepseek-pro/deepseek-v4-pro"},
 		CurrentModel:    "deepseek-flash/deepseek-v4-flash",
+		Jobs:            []jobs.View{{ID: "task-1", Kind: "task", Label: "scan", Status: "running"}},
 	}
 
 	// /skill subcommands
@@ -76,6 +78,15 @@ func TestSlashArgItems(t *testing.T) {
 	items, _ = SlashArgItems("/hooks ", data)
 	if !has(items, "list") || !has(items, "trust") {
 		t.Errorf("/hooks should offer list/trust; got %v", labelsOf(items))
+	}
+	// /jobs
+	items, _ = SlashArgItems("/jobs ", data)
+	if !has(items, "list") || !has(items, "output") || !has(items, "kill") {
+		t.Errorf("/jobs should offer list/output/kill; got %v", labelsOf(items))
+	}
+	items, _ = SlashArgItems("/jobs output ", data)
+	if !has(items, "task-1") {
+		t.Errorf("/jobs output should list job ids; got %v", labelsOf(items))
 	}
 	// /effort
 	items, _ = SlashArgItems("/effort ", data)

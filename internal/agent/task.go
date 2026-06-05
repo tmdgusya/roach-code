@@ -276,6 +276,9 @@ func subSinkFor(parentID string, parent event.Sink) event.Sink {
 			e.Tool.ParentID = parentID
 			e.Tool.ID = parentID + "/" + e.Tool.ID
 			parent.Emit(e)
+		case event.Usage:
+			e.ParentID = parentID
+			parent.Emit(e)
 		}
 	})
 }
