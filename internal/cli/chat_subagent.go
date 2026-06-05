@@ -313,7 +313,7 @@ func (m chatTUI) renderSubagentPanel() string {
 	if len(m.subagents) == 0 {
 		return ""
 	}
-	const maxRows = 12
+	const maxPanelRows = 10
 	runs := make([]*subagentRun, 0, len(m.subagents))
 	for _, run := range m.subagents {
 		runs = append(runs, run)
@@ -324,31 +324,48 @@ func (m chatTUI) renderSubagentPanel() string {
 		}
 		return runs[i].started.Before(runs[j].started)
 	})
+	innerWidth := max(12, m.width-1)
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s\n", glitchMark("AGENTS"), dim(fmt.Sprintf("// %d running", len(m.subagents))))
-	b.WriteString("  " + bold("main") + "\n")
-	count := 0
-	for _, run := range runs {
-		if count >= maxRows {
-			fmt.Fprintf(&b, "%s\n", dim(fmt.Sprintf("  ^ %d more above (/jobs to view all)", len(m.subagents)-count)))
+	header := accent("SUBAGENTS") + " " + shimmer("live", m.shimmerPhase) + " " + dim(fmt.Sprintf("%d running", len(m.subagents)))
+	b.WriteString(clampStatusLine(header, innerWidth))
+	b.WriteString("\n")
+	renderedRuns := 0
+	panelRows := 0
+	for i, run := range runs {
+		if panelRows >= maxPanelRows-1 {
 			break
 		}
-		count++
+		renderedRuns++
+		panelRows++
 		elapsed := formatSubagentDuration(time.Since(run.started))
 		label := run.label
 		if label == "" {
 			label = toolDisplayName(run.name)
 		}
-		line := "  " + yellow("○") + " " + bold(toolDisplayName(run.name)) + cyan("(") + clampPlain(label, 36) + magenta(")")
-		if run.activity != "" {
-			line += dim(" · " + clampPlain(run.activity, 32))
+		remainingAfterThis := len(runs) - renderedRuns
+		lastShown := i == len(runs)-1 || (panelRows >= maxPanelRows-1 && remainingAfterThis == 0)
+		stem := "├─"
+		if lastShown {
+			stem = "╰─"
 		}
-		line += dim(" · " + elapsed)
+		meta := []string{elapsed}
 		if run.tokens > 0 {
-			line += dim(" · " + shortTokens(run.tokens) + " tokens")
+			meta = append(meta, shortTokens(run.tokens)+" tokens")
 		}
-		b.WriteString(clampStatusLine(line, m.width))
+		prefix := "  " + stem + " "
+		labelBudget := max(8, innerWidth-visibleWidth(prefix)-visibleWidth(toolDisplayName(run.name))-visibleWidth(joinSubagentParts(meta))-8)
+		line := dim(prefix) + yellow("● ") + bold(toolDisplayName(run.name)) + dim(" · ") + clampPlain(label, labelBudget) + dim("  "+joinSubagentParts(meta))
+		b.WriteString(clampStatusLine(line, innerWidth))
 		b.WriteString("\n")
+		if run.activity != "" && panelRows < maxPanelRows-1 {
+			panelRows++
+			activity := "  │  " + dim("↳ ") + clampPlain(run.activity, max(8, innerWidth-7))
+			b.WriteString(clampStatusLine(activity, innerWidth))
+			b.WriteString("\n")
+		}
+	}
+	if renderedRuns < len(runs) {
+		fmt.Fprintf(&b, "%s\n", clampStatusLine(dim(fmt.Sprintf("  ╰─ +%d more · /jobs", len(runs)-renderedRuns)), innerWidth))
 	}
 	return todoPanelStyle.Width(max(m.width, 10)).Render(strings.TrimRight(b.String(), "\n"))
 }

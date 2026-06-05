@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -305,6 +306,26 @@ func TestSubagentChildToolsNestUnderTaskAndSummarize(t *testing.T) {
 	if panel := ansi.Strip(m.renderSubagentPanel()); panel != "" {
 		t.Fatalf("completed foreground subagent should leave the live panel:\n%s", panel)
 	}
+}
+
+func TestSubagentPanelOverflowKeepsOpenRail(t *testing.T) {
+	m := newTestChatTUI()
+	for i := 0; i < 13; i++ {
+		m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{
+			ID:   fmt.Sprintf("task%d", i),
+			Name: "task",
+			Args: fmt.Sprintf(`{"description":"scan %02d","prompt":"x"}`, i),
+		}})
+	}
+
+	panel := ansi.Strip(m.renderSubagentPanel())
+	if !strings.Contains(panel, "SUBAGENTS live 13 running") {
+		t.Fatalf("subagent panel should show the live header:\n%s", panel)
+	}
+	if !strings.Contains(panel, "  ├─ ● Task · scan 05") || !strings.Contains(panel, "  ╰─ +4 more · /jobs") {
+		t.Fatalf("overflow should keep the last shown subagent on an open rail before the footer:\n%s", panel)
+	}
+	assertPanelLinesFit(t, panel, m.width)
 }
 
 func TestSubagentChildProgressUsesNestedRail(t *testing.T) {
