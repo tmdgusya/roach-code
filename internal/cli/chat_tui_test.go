@@ -111,6 +111,36 @@ func TestEscCancelsRunningTurnWithCompletionOpen(t *testing.T) {
 	}
 }
 
+func TestGoalSlashCommandWorksWhileRunning(t *testing.T) {
+	r := &blockingTurnRunner{started: make(chan struct{})}
+	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
+	ctrl.Send("busy")
+	<-r.started
+	t.Cleanup(ctrl.Cancel)
+
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m.state = tuiRunning
+	m.input.SetValue("/goal ship the fix")
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(chatTUI)
+
+	if got, _ := ctrl.Goal(); got != "ship the fix" {
+		t.Fatalf("/goal while running should arm the goal, got %q", got)
+	}
+	if strings.TrimSpace(m.input.Value()) != "" {
+		t.Fatalf("submitted /goal should clear the input, got %q", m.input.Value())
+	}
+
+	m.input.SetValue("/goal clear")
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(chatTUI)
+
+	if got, _ := ctrl.Goal(); got != "" {
+		t.Fatalf("/goal clear while running should clear the goal, got %q", got)
+	}
+}
+
 // TestTranscriptMirrorsCommits proves the alt-screen migration's foundation:
 // every line commitLine sends to native scrollback is also captured in the
 // transcript buffer (the future viewport's content source), in order.
