@@ -414,6 +414,16 @@ const SLASH_CMDS = [
   {cmd:'verbose',desc:'Toggle reasoning'},
   {cmd:'help',desc:'Help'},
 ];
+let MODEL_REFS = [], currentModelRef = '', currentModelMatches = [];
+function loadModelsForSlash(){
+  fetch('/models').then(r=>r.json()).then(m=>{
+    MODEL_REFS=m.refs||[];
+    currentModelRef=m.current||'';
+    currentModelMatches=currentModelRef?MODEL_REFS.filter(ref=>ref===currentModelRef||ref.endsWith('/'+currentModelRef)):[];
+    if(input&&input.value.startsWith('/model'))updateSlashMenu();
+  }).catch(()=>{});
+}
+loadModelsForSlash();
 
 // ── helpers ──
 function post(path, body) {
@@ -658,11 +668,28 @@ document.addEventListener('keydown',e=>{
 
 // ── slash menu ──
 let slashOpen=false, slashIndex=0, slashFiltered=[];
+function modelSlashItems(q){
+  const needle=(q||'').toLowerCase();
+  return MODEL_REFS.filter(ref=>{
+    const low=ref.toLowerCase();
+    const bare=low.includes('/')?low.slice(low.indexOf('/')+1):low;
+    return low.includes(needle)||bare.includes(needle);
+  }).map(ref=>({kind:'model',ref,desc:currentModelMatches.length===1&&currentModelMatches[0]===ref?'current':'switch model'}));
+}
 function updateSlashMenu() {
   const v=input.value;
-  if(!v.startsWith('/')||v.includes(' ')){closeSlashMenu();return;}
-  const q=v.slice(1).toLowerCase();
-  slashFiltered=SLASH_CMDS.filter(c=>c.cmd.includes(q));
+  if(!v.startsWith('/')){closeSlashMenu();return;}
+  const sp=v.search(/[ 	]/);
+  if(sp<0){
+    const q=v.slice(1).toLowerCase();
+    slashFiltered=q==='model'?modelSlashItems(''):SLASH_CMDS.filter(c=>c.cmd.includes(q)).map(c=>({kind:'cmd',...c}));
+  } else {
+    const cmd=v.slice(1,sp);
+    if(cmd!=='model'){closeSlashMenu();return;}
+    const arg=v.slice(sp+1).trimStart();
+    if(/[ 	]/.test(arg.trim())){closeSlashMenu();return;}
+    slashFiltered=modelSlashItems(arg);
+  }
   if(slashFiltered.length===0){closeSlashMenu();return;}
   slashOpen=true; slashIndex=0;
   renderSlashMenu();
@@ -672,14 +699,16 @@ function renderSlashMenu() {
   menu.innerHTML='';
   slashFiltered.forEach((c,i)=>{
     const item=el('button','slash-menu__item'+(i===slashIndex?' slash-menu__item--active':''));
-    item.innerHTML='<span class="slash-menu__name">/'+c.cmd+'</span><span class="slash-menu__desc">'+c.desc+'</span>';
+    const name=c.kind==='model'?'/model '+c.ref:'/'+c.cmd;
+    item.innerHTML='<span class="slash-menu__name">'+escHtml(name)+'</span><span class="slash-menu__desc">'+escHtml(c.desc||'')+'</span>';
     item.onmouseenter=()=>{slashIndex=i;renderSlashMenu();};
-    item.onclick=()=>{input.value='/'+c.cmd+' ';closeSlashMenu();input.focus();};
+    item.onclick=()=>{acceptSlashAt(i);};
     menu.appendChild(item);
   });
 }
 function closeSlashMenu(){slashOpen=false;const m=$('#slash-menu');if(m)m.remove();}
-function acceptSlash(){if(!slashOpen)return;const c=slashFiltered[slashIndex];if(c){input.value='/'+c.cmd+' ';}closeSlashMenu();input.focus();}
+function acceptSlashAt(i){const c=slashFiltered[i];if(!c)return;if(c.kind==='model'){input.value='/model '+c.ref;}else{input.value='/'+c.cmd+' ';}closeSlashMenu();input.focus();}
+function acceptSlash(){if(!slashOpen)return;acceptSlashAt(slashIndex);}
 
 // ── SSE ──
 const es=new EventSource('/events');
@@ -710,7 +739,7 @@ es.onmessage=ev=>{
     case 'ask_request': if(e.ask)showAsk(e.ask); break;
     case 'compaction_started': showCompaction({trigger:e.compaction?.trigger}); break;
     case 'compaction_done': showCompaction(e.compaction||{}); break;
-    case 'turn_done': finalizeMsg(); setRunning(false); if(e.err){log.appendChild(el('div','msg--error','✗ '+e.err));scrollDown();} fetchStatus(); break;
+    case 'turn_done': finalizeMsg(); setRunning(false); if(e.err){log.appendChild(el('div','msg--error','✗ '+e.err));scrollDown();} fetchStatus(); loadModelsForSlash(); break;
   }
 };
 es.onerror=()=>{statusText.textContent='Disconnected';statusDot.className='status__dot';};
@@ -768,7 +797,7 @@ function loadSessions(){
 loadSessions();
 
 // ── input handling ──
-function send(){ const v=input.value.trim(); if(!v)return; addUserMsg(v); post('/submit',{input:v}); input.value='';input.style.height='';closeSlashMenu(); }
+function send(){ const v=input.value.trim(); if(!v)return; addUserMsg(v); const req=post('/submit',{input:v}); if(v.startsWith('/model'))req.then(()=>{fetchStatus();loadModelsForSlash();}).catch(()=>{}); input.value='';input.style.height='';closeSlashMenu(); }
 
 input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,140)+'px';updateSlashMenu();});
 input.addEventListener('keydown',e=>{
@@ -776,7 +805,11 @@ input.addEventListener('keydown',e=>{
   if(slashOpen){
     if(e.key==='ArrowDown'){e.preventDefault();slashIndex=Math.min(slashIndex+1,slashFiltered.length-1);renderSlashMenu();return;}
     if(e.key==='ArrowUp'){e.preventDefault();slashIndex=Math.max(slashIndex-1,0);renderSlashMenu();return;}
-    if(e.key==='Tab'||e.key==='Enter'){e.preventDefault();acceptSlash();return;}
+    if(e.key==='Tab'||e.key==='Enter'){
+      e.preventDefault();
+      if(e.key==='Enter'&&input.value.trim()==='/model'){closeSlashMenu();send();return;}
+      acceptSlash();return;
+    }
     if(e.key==='Escape'){e.preventDefault();closeSlashMenu();return;}
   }
   // main keys
