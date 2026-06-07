@@ -33,14 +33,14 @@ type compItem struct {
 }
 
 // completion is the live autocomplete menu state. Empty value = inactive.
-// replaceFrom is the byte offset in the input where the completed token starts
-// (0 for a slash line, the '@' index for an @-reference).
+// replaceFrom/replaceTo are byte offsets delimiting the token to replace.
 type completion struct {
 	active      bool
 	kind        compKind
 	items       []compItem
 	sel         int
 	replaceFrom int
+	replaceTo   int
 }
 
 const (
@@ -101,6 +101,7 @@ func (m *chatTUI) slashItems() []compItem {
 // token under the cursor is "@…".
 func (m *chatTUI) updateCompletion() {
 	val := m.input.Value()
+	cursor := m.inputCursorOffset()
 
 	// An @-reference token under the cursor wins — it can appear mid-line, even
 	// inside a slash command's arguments (e.g. "/review @file").
@@ -111,14 +112,18 @@ func (m *chatTUI) updateCompletion() {
 		}
 	}
 
+	if from, to, token, ok := activeSlashToken(val, cursor); ok {
+		// Still naming the command itself. The token is cursor-relative, so typing
+		// '/' before existing text offers all commands and accepting preserves the
+		// suffix as command arguments ("/abc" with cursor after '/' → "/init abc").
+		if items := filterByPrefix(m.slashItems(), token); len(items) > 0 {
+			m.setCompletionRange(compSlash, items, from, to)
+			return
+		}
+	}
+
 	if strings.HasPrefix(val, "/") {
-		if !strings.ContainsAny(val, " \t\n") {
-			// Still naming the command itself.
-			if items := filterByPrefix(m.slashItems(), val); len(items) > 0 {
-				m.setCompletion(compSlash, items, 0)
-				return
-			}
-		} else if items, from, ok := m.slashArgItems(val); ok && len(items) > 0 {
+		if items, from, ok := m.slashArgItems(val); ok && len(items) > 0 {
 			// Past the command word — complete its structured arguments.
 			m.setCompletion(compSlashArg, items, from)
 			return
@@ -207,13 +212,20 @@ func (m *chatTUI) branchArgItems(val string) ([]compItem, int, bool) {
 }
 
 // setCompletion installs items, preserving the selection index only while the
-// same menu kind stays open.
+// same menu kind stays open. By default it replaces from replaceFrom through the
+// end of the input, matching the historical completion behavior.
 func (m *chatTUI) setCompletion(kind compKind, items []compItem, replaceFrom int) {
+	m.setCompletionRange(kind, items, replaceFrom, len(m.input.Value()))
+}
+
+// setCompletionRange installs items that replace the input byte range
+// [replaceFrom, replaceTo) when accepted.
+func (m *chatTUI) setCompletionRange(kind compKind, items []compItem, replaceFrom, replaceTo int) {
 	sel := 0
 	if m.completion.active && m.completion.kind == kind && m.completion.sel < len(items) {
 		sel = m.completion.sel
 	}
-	m.completion = completion{active: true, kind: kind, items: items, sel: sel, replaceFrom: replaceFrom}
+	m.completion = completion{active: true, kind: kind, items: items, sel: sel, replaceFrom: replaceFrom, replaceTo: replaceTo}
 }
 
 // filterByPrefix keeps items whose label starts with prefix (case-insensitive).
@@ -226,6 +238,70 @@ func filterByPrefix(items []compItem, prefix string) []compItem {
 		}
 	}
 	return out
+}
+
+// inputCursorOffset returns the textarea cursor as a byte offset into Value().
+func (m *chatTUI) inputCursorOffset() int {
+	val := m.input.Value()
+	row := m.input.Line()
+	col := m.input.Column()
+	off := 0
+	for i, line := range strings.Split(val, "\n") {
+		if i == row {
+			r := []rune(line)
+			if col > len(r) {
+				col = len(r)
+			}
+			return off + len(string(r[:col]))
+		}
+		off += len(line) + 1
+	}
+	return len(val)
+}
+
+// setInputCursorOffset moves the textarea cursor to a byte offset in Value().
+func (m *chatTUI) setInputCursorOffset(offset int) {
+	val := m.input.Value()
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(val) {
+		offset = len(val)
+	}
+	seen := 0
+	for row, line := range strings.Split(val, "\n") {
+		lineEnd := seen + len(line)
+		if offset <= lineEnd {
+			col := len([]rune(val[seen:offset]))
+			m.input.SetCursor(row, col)
+			return
+		}
+		seen = lineEnd + 1
+	}
+	m.input.CursorEnd()
+}
+
+// activeSlashToken finds a slash-command name token at the current cursor. The
+// filter/replace token is only the text from the slash through the cursor, so a
+// slash inserted before existing text can still complete and preserve the suffix.
+func activeSlashToken(val string, cursor int) (from, to int, token string, ok bool) {
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor > len(val) {
+		cursor = len(val)
+	}
+	from = cursor
+	for from > 0 && val[from-1] != ' ' && val[from-1] != '\t' && val[from-1] != '\n' {
+		from--
+	}
+	if from >= len(val) || val[from] != '/' {
+		return 0, 0, "", false
+	}
+	if strings.TrimSpace(val[:from]) != "" {
+		return 0, 0, "", false
+	}
+	return from, cursor, val[from:cursor], true
 }
 
 // activeAtToken finds the @-reference token ending at the cursor (assumed at the
@@ -377,11 +453,22 @@ func (m *chatTUI) acceptCompletion() {
 	it := m.completion.items[m.completion.sel]
 	val := m.input.Value()
 	rf := m.completion.replaceFrom
+	rt := m.completion.replaceTo
 	if rf > len(val) {
 		rf = len(val)
 	}
-	m.input.SetValue(val[:rf] + it.insert)
-	m.input.CursorEnd()
+	if rt < rf {
+		rt = rf
+	}
+	if rt > len(val) {
+		rt = len(val)
+	}
+	suffix := val[rt:]
+	if strings.HasSuffix(it.insert, " ") && len(suffix) > 0 && (suffix[0] == ' ' || suffix[0] == '	') {
+		suffix = suffix[1:]
+	}
+	m.input.SetValue(val[:rf] + it.insert + suffix)
+	m.setInputCursorOffset(rf + len(it.insert))
 	if it.descend || strings.HasSuffix(it.insert, " ") {
 		m.updateCompletion()
 		return
@@ -391,7 +478,18 @@ func (m *chatTUI) acceptCompletion() {
 	// selected (i.e. the token was already typed), close it so the next Enter
 	// submits the command rather than being captured again by acceptCompletion.
 	if m.completion.active && len(m.completion.items) == 1 {
-		tok := m.input.Value()[m.completion.replaceFrom:]
+		tokVal := m.input.Value()
+		rf, rt := m.completion.replaceFrom, m.completion.replaceTo
+		if rf > len(tokVal) {
+			rf = len(tokVal)
+		}
+		if rt < rf {
+			rt = rf
+		}
+		if rt > len(tokVal) {
+			rt = len(tokVal)
+		}
+		tok := tokVal[rf:rt]
 		if tok == m.completion.items[0].insert {
 			m.completion = completion{}
 		}

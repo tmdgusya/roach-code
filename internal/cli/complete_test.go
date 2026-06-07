@@ -10,6 +10,7 @@ import (
 	"roach-code/internal/control"
 	"roach-code/internal/event"
 	"roach-code/internal/provider"
+	"roach-code/internal/skill"
 )
 
 // writeAt creates dir/rel (with parents) holding content, for fs-backed tests.
@@ -43,6 +44,43 @@ func TestSlashCompletionFilterAndAccept(t *testing.T) {
 	}
 	if m.completion.active {
 		t.Error("menu should close after accept")
+	}
+}
+
+func TestSlashCompletionUsesCursorTokenAndPreservesSuffix(t *testing.T) {
+	m := newTestChatTUI()
+	m.input.SetValue("/co hello")
+	m.input.SetCursorColumn(3) // cursor after /co, before the existing suffix
+	m.updateCompletion()
+
+	if !m.completion.active || m.completion.kind != compSlash {
+		t.Fatalf("cursor inside slash token should open the slash menu: %+v", m.completion)
+	}
+	if len(m.completion.items) != 1 || m.completion.items[0].label != "/compact" {
+		t.Fatalf("filter = %v, want just /compact", labels(m.completion.items))
+	}
+
+	m.acceptCompletion()
+	if got := m.input.Value(); got != "/compact hello" {
+		t.Errorf("accept should preserve suffix as arguments, got %q", got)
+	}
+	if got := m.inputCursorOffset(); got != len("/compact ") {
+		t.Errorf("cursor offset after accept = %d, want %d", got, len("/compact "))
+	}
+}
+
+func TestSlashCompletionInsertedAtStartShowsSkills(t *testing.T) {
+	m := newTestChatTUI()
+	m.skills = []skill.Skill{{Name: "init", Description: "bootstrap AGENTS.md", RunAs: skill.RunInline}}
+	m.input.SetValue("/abc")
+	m.input.SetCursorColumn(1) // user typed / at the beginning before existing text
+	m.updateCompletion()
+
+	if !m.completion.active || m.completion.kind != compSlash {
+		t.Fatalf("cursor after leading slash should open the slash menu: %+v", m.completion)
+	}
+	if !hasLabel(m.completion.items, "/init") {
+		t.Fatalf("skill /init should be hinted when token is just '/', got %v", labels(m.completion.items))
 	}
 }
 
