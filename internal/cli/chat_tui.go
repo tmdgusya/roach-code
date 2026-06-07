@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -296,9 +297,16 @@ func newChatTUI(ctrl *control.Controller, missing string, eventCh chan event.Eve
 	ti.DynamicHeight = true
 	ti.MaxHeight = maxInputRows
 	applyTextareaTheme(&ti)
-	// Use the real terminal cursor (not a styled virtual one) so View can place
-	// it at the insertion point and IME candidate windows anchor to the input.
-	ti.SetVirtualCursor(false)
+	// Cursor mode. We prefer the REAL terminal cursor (View places it at the
+	// insertion point so IME candidate windows anchor to the input). But Warp's
+	// GPU renderer mishandles the per-keystroke real-cursor reposition + the
+	// hide/show churn that mode emits, so editing mid-line smears trailing glyphs
+	// (gaps / overwrites) in the composer — only live, since committed lines are
+	// printed sequentially. There we fall back to the textarea's virtual cursor
+	// (a styled cell drawn in the content), which needs no real-cursor movement.
+	// ROACH_VIRTUAL_CURSOR=1/0 forces the choice for other terminals with the
+	// same quirk (or to opt back out).
+	ti.SetVirtualCursor(useVirtualInputCursor())
 	// Plain Enter submits (the chatTUI handler intercepts it), so the textarea's
 	// own InsertNewline binding moves to Alt+Enter / Ctrl+J / Shift+Enter.
 	ti.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "ctrl+j", "shift+enter"))
@@ -334,6 +342,20 @@ func newChatTUI(ctrl *control.Controller, missing string, eventCh chan event.Eve
 		skills:                  ctrl.Skills(),
 		viewport:                viewport.New(viewport.WithWidth(termW)),
 	}
+}
+
+// useVirtualInputCursor decides the composer cursor mode. ROACH_VIRTUAL_CURSOR
+// overrides everything ("1"/"true" → virtual, "0"/"false" → real); otherwise we
+// use the virtual cursor on Warp, whose GPU renderer smears mid-line edits when
+// driven by the real cursor's per-keystroke reposition + hide/show churn.
+func useVirtualInputCursor() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("ROACH_VIRTUAL_CURSOR"))) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	}
+	return os.Getenv("TERM_PROGRAM") == "WarpTerminal"
 }
 
 // prompts returns the MCP prompts discovered at startup (nil when no plugins).
