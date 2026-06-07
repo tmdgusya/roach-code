@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/rivo/uniseg"
 	"roach-code/internal/textarea"
 
 	"roach-code/internal/command"
@@ -43,6 +45,10 @@ type chatTUI struct {
 
 	input   textarea.Model
 	spinner spinner.Model
+	// inputHadWide records whether the previous keystroke left a wide (CJK) glyph
+	// in the composer, so the Warp full-repaint workaround also covers the frame
+	// that deletes the last wide glyph (see forceInputRepaint).
+	inputHadWide bool
 
 	submittedInputs      []string
 	submittedInputCursor int
@@ -957,9 +963,42 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Re-filter the autocomplete menu against the freshly-edited input.
 	if _, ok := msg.(tea.KeyPressMsg); ok {
 		m.updateCompletion()
+		// Warp workaround: its renderer corrupts in-place updates over CJK wide
+		// glyphs (gaps / ghosts), but draws a fresh full frame correctly. When the
+		// composer holds — or just held — a wide rune, force a full repaint so the
+		// edited line is redrawn from scratch instead of incrementally diffed.
+		wide := hasWideRune(m.input.Value())
+		if forceInputRepaint(wide, m.inputHadWide) {
+			cmds = append(cmds, tea.ClearScreen)
+		}
+		m.inputHadWide = wide
 	}
 
 	return m, finalize(m, cmds)
+}
+
+// hasWideRune reports whether s contains a rune wider than one cell (CJK and
+// other East Asian wide glyphs), i.e. the case Warp mis-renders incrementally.
+func hasWideRune(s string) bool {
+	return uniseg.StringWidth(s) > len([]rune(s))
+}
+
+// forceInputRepaint decides whether to force a full repaint (tea.ClearScreen)
+// for the composer this frame. Warp mishandles incremental redraws over wide
+// glyphs, so on Warp we repaint whenever the input holds (wideNow) or just held
+// (widePrev) one — the latter covers deleting the last wide glyph. Other
+// terminals diff fine and are left untouched. ROACH_FULL_REPAINT=1/0 overrides.
+func forceInputRepaint(wideNow, widePrev bool) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("ROACH_FULL_REPAINT"))) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	}
+	if os.Getenv("TERM_PROGRAM") != "WarpTerminal" {
+		return false
+	}
+	return wideNow || widePrev
 }
 
 var (
