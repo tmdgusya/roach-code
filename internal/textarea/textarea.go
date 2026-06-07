@@ -734,6 +734,16 @@ func (m *Model) SetCursorColumn(col int) {
 	m.lastCharOffset = 0
 }
 
+// SetCursor moves the cursor to the given row and column. If either position is
+// out of bounds, it is clamped to the nearest valid location.
+func (m *Model) SetCursor(row, col int) {
+	if len(m.value) == 0 {
+		return
+	}
+	m.row = clamp(row, 0, len(m.value)-1)
+	m.SetCursorColumn(col)
+}
+
 // CursorStart moves the cursor to the start of the input field.
 func (m *Model) CursorStart() {
 	m.SetCursorColumn(0)

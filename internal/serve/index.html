@@ -667,7 +667,7 @@ document.addEventListener('keydown',e=>{
 });
 
 // ── slash menu ──
-let slashOpen=false, slashIndex=0, slashFiltered=[];
+let slashOpen=false, slashIndex=0, slashFiltered=[], slashFrom=0, slashTo=0;
 function modelSlashItems(q){
   const needle=(q||'').toLowerCase();
   return MODEL_REFS.filter(ref=>{
@@ -676,20 +676,31 @@ function modelSlashItems(q){
     return low.includes(needle)||bare.includes(needle);
   }).map(ref=>({kind:'model',ref,desc:currentModelMatches.length===1&&currentModelMatches[0]===ref?'current':'switch model'}));
 }
+function activeSlashToken(v,cursor){
+  cursor=Math.max(0,Math.min(cursor==null?v.length:cursor,v.length));
+  let from=cursor;
+  while(from>0&&!/[ \t\n]/.test(v[from-1]))from--;
+  if(from>=v.length||v[from]!=='/')return null;
+  if(v.slice(0,from).trim()!=='')return null;
+  return {from,to:cursor,token:v.slice(from,cursor)};
+}
 function updateSlashMenu() {
   const v=input.value;
-  if(!v.startsWith('/')){closeSlashMenu();return;}
-  const sp=v.search(/[ 	]/);
-  if(sp<0){
-    const q=v.slice(1).toLowerCase();
+  const active=activeSlashToken(v,input.selectionStart);
+  if(active){
+    slashFrom=active.from; slashTo=active.to;
+    const q=active.token.slice(1).toLowerCase();
     slashFiltered=q==='model'?modelSlashItems(''):SLASH_CMDS.filter(c=>c.cmd.includes(q)).map(c=>({kind:'cmd',...c}));
-  } else {
+  } else if(v.startsWith('/')){
+    slashFrom=0; slashTo=v.length;
+    const sp=v.search(/[ \t]/);
+    if(sp<0){closeSlashMenu();return;}
     const cmd=v.slice(1,sp);
     if(cmd!=='model'){closeSlashMenu();return;}
     const arg=v.slice(sp+1).trimStart();
-    if(/[ 	]/.test(arg.trim())){closeSlashMenu();return;}
+    if(/[ \t]/.test(arg.trim())){closeSlashMenu();return;}
     slashFiltered=modelSlashItems(arg);
-  }
+  } else {closeSlashMenu();return;}
   if(slashFiltered.length===0){closeSlashMenu();return;}
   slashOpen=true; slashIndex=0;
   renderSlashMenu();
@@ -707,7 +718,18 @@ function renderSlashMenu() {
   });
 }
 function closeSlashMenu(){slashOpen=false;const m=$('#slash-menu');if(m)m.remove();}
-function acceptSlashAt(i){const c=slashFiltered[i];if(!c)return;if(c.kind==='model'){input.value='/model '+c.ref;}else{input.value='/'+c.cmd+' ';}closeSlashMenu();input.focus();}
+function acceptSlashAt(i){
+  const c=slashFiltered[i];if(!c)return;
+  const v=input.value;
+  const insert=c.kind==='model'?'/model '+c.ref:'/'+c.cmd+' ';
+  const from=Math.max(0,Math.min(slashFrom,v.length));
+  const to=Math.max(from,Math.min(slashTo,v.length));
+  let suffix=v.slice(to);
+  if(insert.endsWith(' ')&&/^[ 	]/.test(suffix))suffix=suffix.slice(1);
+  input.value=v.slice(0,from)+insert+suffix;
+  input.selectionStart=input.selectionEnd=from+insert.length;
+  closeSlashMenu();input.focus();updateSlashMenu();
+}
 function acceptSlash(){if(!slashOpen)return;acceptSlashAt(slashIndex);}
 
 // ── SSE ──
