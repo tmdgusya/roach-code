@@ -109,7 +109,7 @@ func (m *chatTUI) replayActiveBranch(title string) {
 	if title != "" {
 		m.commitLine(dim("  -- " + title + " --"))
 	}
-	m.commitLine(strings.TrimRight(renderTUIBanner(m.label, "", m.width), "\n"))
+	m.commitLine(strings.TrimRight(renderTUIBanner(m.label, "", "", m.width), "\n"))
 	for _, section := range replaySectionsFor(m.ctrl.History(), m.width, m.renderer) {
 		m.commitLine(strings.TrimRight(section, "\n"))
 	}

@@ -24,11 +24,12 @@ var English = Messages{
 	StepRunDesc:    "one-shot task",
 	HelpFooter:     "roach-code help · all commands",
 
-	ChatTip:           "Context is kept across turns. Type 'exit' or Ctrl-D to quit.",
-	TurnCancelled:     "cancelled — back to prompt",
-	NoSessionToResume: "no saved session to resume — start a new one with `roach-code chat`",
-	ResumeRequiresTTY: "--resume needs an interactive terminal; pass --continue for the most recent session",
-	PickSessionLabel:  "Resume which session?",
+	ChatTip:            "Context is kept across turns. Type 'exit' or Ctrl-D to quit.",
+	UpdateAvailableFmt: "New version %s is available — run `roach-code update`",
+	TurnCancelled:      "cancelled — back to prompt",
+	NoSessionToResume:  "no saved session to resume — start a new one with `roach-code chat`",
+	ResumeRequiresTTY:  "--resume needs an interactive terminal; pass --continue for the most recent session",
+	PickSessionLabel:   "Resume which session?",
 
 	ResumeListHeader:    "sessions (/resume <n> to switch)",
 	ResumeBusy:          "finish or cancel the current turn before resuming",

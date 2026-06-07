@@ -43,7 +43,7 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 		m.todoArgs = ""
 		m.chooser = nil
 		m.commitLine("")
-		m.commitLine(strings.TrimRight(renderTUIBanner(m.label, "", m.width), "\n"))
+		m.commitLine(strings.TrimRight(renderTUIBanner(m.label, "", "", m.width), "\n"))
 		m.notice(i18n.M.SlashNewDone)
 	case "/resume":
 		m.runResumeCommand(input)

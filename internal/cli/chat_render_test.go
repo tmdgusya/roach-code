@@ -202,7 +202,7 @@ func TestApprovalBannerClampsToWidth(t *testing.T) {
 func TestRenderTUIBannerClampsNarrowWidth(t *testing.T) {
 	i18n.DetectLanguage("en")
 	width := 32
-	out := ansi.Strip(renderTUIBanner(strings.Repeat("model-", 20), "", width))
+	out := ansi.Strip(renderTUIBanner(strings.Repeat("model-", 20), "", "", width))
 	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
 		if w := ansi.StringWidth(line); w > width {
 			t.Fatalf("startup banner width = %d, want <= %d:\n%s", w, width, line)

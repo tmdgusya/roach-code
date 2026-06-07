@@ -25,11 +25,12 @@ var Chinese = Messages{
 	StepRunDesc:    "执行单次任务",
 	HelpFooter:     "roach-code help · 查看全部命令",
 
-	ChatTip:           "对话上下文将跨轮保留。输入 'exit' 或按 Ctrl-D 退出。",
-	TurnCancelled:     "已取消 — 回到提示符",
-	NoSessionToResume: "没有可恢复的会话 — 用 `roach-code chat` 开一个新的",
-	ResumeRequiresTTY: "--resume 需要交互式终端；用 --continue 直接恢复最近一次",
-	PickSessionLabel:  "恢复哪个会话？",
+	ChatTip:            "对话上下文将跨轮保留。输入 'exit' 或按 Ctrl-D 退出。",
+	UpdateAvailableFmt: "有新版本 %s 可用 — 请运行 `roach-code update`",
+	TurnCancelled:      "已取消 — 回到提示符",
+	NoSessionToResume:  "没有可恢复的会话 — 用 `roach-code chat` 开一个新的",
+	ResumeRequiresTTY:  "--resume 需要交互式终端；用 --continue 直接恢复最近一次",
+	PickSessionLabel:   "恢复哪个会话？",
 
 	ResumeListHeader:    "会话（/resume <n> 切换）",
 	ResumeBusy:          "请先完成或取消当前这一轮再恢复会话",

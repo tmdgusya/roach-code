@@ -28,7 +28,7 @@ func TestStatusRowHasNoSurfaceBackgroundBand(t *testing.T) {
 
 	const boxW = 80
 	ctrl := control.New(control.Options{})
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), boxW)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), boxW, "")
 	next, _ := m.Update(tea.WindowSizeMsg{Width: boxW, Height: 24})
 	rendered := next.(chatTUI).View().Content
 

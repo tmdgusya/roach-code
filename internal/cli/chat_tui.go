@@ -36,9 +36,11 @@ import (
 // mirrors the Ink <Static> pattern to freeze finished output into
 // scrollback while re-rendering just the active prompt.
 type chatTUI struct {
-	ctrl    *control.Controller
-	label   string
-	missing string // missing-key warning surfaced once in the banner, "" when ready
+	ctrl         *control.Controller
+	label        string
+	missing      string // missing-key warning surfaced once in the banner, "" when ready
+	version      string // build version for update checks
+	updateNotice string // non-empty when a newer release exists
 
 	width  int
 	height int
@@ -291,7 +293,7 @@ const (
 // with an event sink that feeds eventCh; the TUI issues commands to it and
 // renders the events it emits. Label, history, host, and commands are read from
 // the controller, so a resumed session pre-populates scrollback.
-func newChatTUI(ctrl *control.Controller, missing string, eventCh chan event.Event, termW int) chatTUI {
+func newChatTUI(ctrl *control.Controller, missing string, eventCh chan event.Event, termW int, version string) chatTUI {
 	ti := textarea.New()
 	ti.Prompt = ""
 	ti.CharLimit = 16384
@@ -319,6 +321,7 @@ func newChatTUI(ctrl *control.Controller, missing string, eventCh chan event.Eve
 		ctrl:                    ctrl,
 		label:                   ctrl.Label(),
 		missing:                 missing,
+		version:                 version,
 		input:                   ti,
 		spinner:                 sp,
 		submittedInputCursor:    -1,
@@ -355,8 +358,9 @@ func (m chatTUI) Init() tea.Cmd {
 		textarea.Blink,
 		waitForAgentEvent(m.eventCh),
 		fetchBalance(m.ctrl),
-		m.runStatusline(), // nil (no-op) unless a custom status line is configured
-		bannerFrameTick(), // welcome-banner glow frames (~60fps, only while bannerLive)
+		m.runStatusline(),         // nil (no-op) unless a custom status line is configured
+		bannerFrameTick(),         // welcome-banner glow frames (~60fps, only while bannerLive)
+		checkUpdateCmd(m.version), // async update check; result surfaces in the banner
 	)
 }
 
@@ -433,7 +437,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Width >= roachArtWidth()+3 && len(histSecs) == 0 {
 				m.bannerLive = true
 			} else {
-				m.commitLine(strings.TrimRight(renderTUIBanner(m.label, m.missing, msg.Width), "\n"))
+				m.commitLine(strings.TrimRight(renderTUIBanner(m.label, m.missing, m.updateNotice, msg.Width), "\n"))
 				for _, sec := range histSecs {
 					m.commitLine(strings.TrimRight(sec, "\n"))
 				}
@@ -944,6 +948,11 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.bannerLive {
 			m.bannerPhase++
 			cmds = append(cmds, bannerFrameTick())
+		}
+
+	case updateCheckMsg:
+		if msg.latest != "" && msg.latest != m.version {
+			m.updateNotice = fmt.Sprintf(i18n.M.UpdateAvailableFmt, msg.latest)
 		}
 
 	case spinner.TickMsg:

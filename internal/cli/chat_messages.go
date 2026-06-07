@@ -117,6 +117,38 @@ func bannerFrameTick() tea.Cmd {
 	return tea.Tick(time.Second/60, func(_ time.Time) tea.Msg { return bannerFrameMsg{} })
 }
 
+// updateCheckMsg carries the result of an async latest-release check.
+type updateCheckMsg struct {
+	latest string
+	err    error
+}
+
+// checkUpdateCmd fetches the latest GitHub release tag off the event loop.
+// It respects a 3-hour on-disk cache so frequent restarts don't hammer the
+// GitHub API. It silently returns an empty latest on error so the banner never
+// surfaces noise for offline or slow networks.
+func checkUpdateCmd(version string) tea.Cmd {
+	return func() tea.Msg {
+		if latest, ok := readUpdateCache(); ok {
+			if latest != version && latest != "" {
+				return updateCheckMsg{latest: latest}
+			}
+			return updateCheckMsg{}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		latest, err := latestReleaseTag(ctx, repoSlug())
+		if err != nil || latest == "" {
+			return updateCheckMsg{}
+		}
+		writeUpdateCache(latest)
+		if latest == version {
+			return updateCheckMsg{}
+		}
+		return updateCheckMsg{latest: latest}
+	}
+}
+
 // eventSink is the event.Sink the agent emits to in TUI mode. Each event
 // becomes an agentEventMsg. The channel is generously buffered so streaming
 // bursts don't back-pressure the agent goroutine.

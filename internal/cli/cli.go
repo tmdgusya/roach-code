@@ -54,7 +54,7 @@ func Run(args []string, version string) int {
 	case "run":
 		return runAgent(rest)
 	case "chat":
-		return chatREPL(rest)
+		return chatREPL(rest, version)
 	case "serve":
 		return runServe(rest)
 	case "setup":
@@ -282,7 +282,7 @@ func runServe(args []string) int {
 // chatREPL is an interactive session: a single persistent agent/session and a
 // prompt loop that keeps conversation context across turns. Exit with
 // 'exit'/'quit' or Ctrl-D.
-func chatREPL(args []string) int {
+func chatREPL(args []string, version string) int {
 	fs := flag.NewFlagSet("chat", flag.ContinueOnError)
 	model := fs.String("model", "", "provider name (default: config default_model)")
 	maxSteps := fs.Int("max-steps", 0, "max tool-call rounds (0 = use config/default)")
@@ -388,7 +388,7 @@ func chatREPL(args []string) int {
 		ctrl.SetBypass(true)
 	}
 
-	m := newChatTUI(ctrl, missing, eventCh, termW)
+	m := newChatTUI(ctrl, missing, eventCh, termW, version)
 	if cfg, err := config.Load(); err == nil {
 		m.outputStyle = cfg.Agent.OutputStyle      // shown as the active entry in /output-style
 		m.statuslineCmd = cfg.Statusline.Command   // custom status-line command, "" = built-in row
@@ -1306,7 +1306,7 @@ func welcome(version string) int {
 				i18n.DetectLanguage(cfg.Language)
 			}
 			fmt.Printf("\n"+i18n.M.StartingChatFmt+"\n\n", bold("roach-code chat"))
-			return chatREPL(nil)
+			return chatREPL(nil, version)
 		}
 		fmt.Println("\n" + i18n.M.SetKeyHint)
 		return 0
@@ -1326,7 +1326,7 @@ func welcome(version string) int {
 		if rc := promptMissingKeys(cfg); rc != 0 {
 			return rc
 		}
-		return chatREPL(nil)
+		return chatREPL(nil, version)
 	}
 
 	var b strings.Builder

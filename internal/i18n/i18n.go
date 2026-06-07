@@ -48,11 +48,12 @@ type Messages struct {
 	HelpFooter     string // dim footer linking to roach-code help
 
 	// chat REPL
-	ChatTip           string // tip line under the chat banner
-	TurnCancelled     string // shown when Ctrl-C aborts the in-flight turn but the chat keeps running
-	NoSessionToResume string // shown when --continue / --resume finds nothing
-	ResumeRequiresTTY string // shown when --resume runs piped instead of on a terminal
-	PickSessionLabel  string // header on the --resume picker
+	ChatTip            string // tip line under the chat banner
+	UpdateAvailableFmt string // banner line when a newer release exists — %s = latest tag
+	TurnCancelled      string // shown when Ctrl-C aborts the in-flight turn but the chat keeps running
+	NoSessionToResume  string // shown when --continue / --resume finds nothing
+	ResumeRequiresTTY  string // shown when --resume runs piped instead of on a terminal
+	PickSessionLabel   string // header on the --resume picker
 
 	// in-chat /resume command
 	ResumeListHeader    string // header above the /resume session list
