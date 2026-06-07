@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"charm.land/bubbles/v2/textarea"
 	"charm.land/lipgloss/v2"
+	"roach-code/internal/textarea"
 
 	"roach-code/internal/i18n"
 )

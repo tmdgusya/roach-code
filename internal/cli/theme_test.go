@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"charm.land/bubbles/v2/textarea"
 	"charm.land/lipgloss/v2"
+	"roach-code/internal/textarea"
 )
 
 func TestConfigureCLIThemeSwitchesModeAndDefaultStyle(t *testing.T) {

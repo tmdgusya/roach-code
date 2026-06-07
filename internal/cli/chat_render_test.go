@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"charm.land/bubbles/v2/textarea"
 	"github.com/charmbracelet/x/ansi"
+	"roach-code/internal/textarea"
 
 	"roach-code/internal/event"
 	"roach-code/internal/i18n"
