@@ -118,7 +118,7 @@ func TestGoalSlashCommandWorksWhileRunning(t *testing.T) {
 	<-r.started
 	t.Cleanup(ctrl.Cancel)
 
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
 	m.state = tuiRunning
 	m.input.SetValue("/goal ship the fix")
 
@@ -164,7 +164,7 @@ func TestTranscriptMirrorsCommits(t *testing.T) {
 // rows = 5 with an empty 1-line composer), and is fed the committed transcript.
 func TestTranscriptViewportSizing(t *testing.T) {
 	ctrl := control.New(control.Options{})
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
 
 	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = m0.(chatTUI)
@@ -339,7 +339,7 @@ func TestAnswerTextStartingWithBracketStaysInAnswer(t *testing.T) {
 // needs a modifier). It exercises the real constructor, not a hand-built binding.
 func TestInsertNewlineKeyBinding(t *testing.T) {
 	ctrl := control.New(control.Options{})
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
 	keys := m.input.KeyMap.InsertNewline.Keys()
 	found := false
 	for _, k := range keys {
@@ -494,7 +494,7 @@ func TestSubmittedInputRecallWithArrowKeys(t *testing.T) {
 // transcript viewport pads to fill above the pinned bottom region).
 func TestViewAltScreenFillsHeight(t *testing.T) {
 	ctrl := control.New(control.Options{})
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
 	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	v := m0.(chatTUI).View()
 
@@ -519,7 +519,7 @@ func TestTranscriptTailFollow(t *testing.T) {
 	}
 	notice := agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"})
 
-	cur := adv(newChatTUI(ctrl, "", make(chan event.Event, 1), 80), tea.WindowSizeMsg{Width: 80, Height: 8})
+	cur := adv(newChatTUI(ctrl, "", make(chan event.Event, 1), 80, ""), tea.WindowSizeMsg{Width: 80, Height: 8})
 	for i := 0; i < 12; i++ { // overflow the short viewport so there's room to scroll
 		cur = adv(cur, notice)
 	}
@@ -637,7 +637,7 @@ func TestSlashQuitExit(t *testing.T) {
 // second press within the window returns tea.Quit.
 func TestDoubleCtrlCQuit(t *testing.T) {
 	ctrl := control.New(control.Options{})
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
 	ctrlC := tea.KeyPressMsg{Code: 'c', Mod: 4} // 4 = ModCtrl
 
 	// First Ctrl+C while idle: arms quit, flushes hint via finalize cmd.

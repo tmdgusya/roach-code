@@ -43,7 +43,7 @@ func (m *chatTUI) startMessageTurnWithRaw(msg provider.Message, displayed, resto
 	// becomes normal scrollback and the viewport takes over from the live render.
 	if m.bannerLive {
 		m.bannerLive = false
-		staticBanner := strings.TrimRight(renderTUIBanner(m.label, m.missing, m.width), "\n")
+		staticBanner := strings.TrimRight(renderTUIBanner(m.label, m.missing, m.updateNotice, m.width), "\n")
 		m.transcript = append([]string{staticBanner}, m.transcript...)
 		m.transcriptDirty = true
 	}

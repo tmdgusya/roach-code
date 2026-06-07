@@ -171,7 +171,7 @@ func TestStatuslineShowsRunningAndRetainedDoneJobs(t *testing.T) {
 	_ = jm.Wait(context.Background(), []string{done.ID}, 0)
 
 	ctrl := control.New(control.Options{Jobs: jm})
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	plain := bottomStatusPlain(next.(chatTUI).View().Content)
 	if !strings.Contains(plain, "1 job") {
@@ -196,7 +196,7 @@ func TestRefreshEffortStatusUsesCurrentModel(t *testing.T) {
 	isolateUserConfig(t)
 
 	ctrl := control.New(control.Options{})
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
 	m.modelRef = "deepseek-flash/deepseek-v4-flash"
 	m.refreshEffortStatus()
 	if m.effortLevel != "auto" {
@@ -209,7 +209,7 @@ func renderStatuslineView(t *testing.T, yolo bool) string {
 
 	ctrl := control.New(control.Options{})
 	ctrl.SetBypass(yolo)
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	return next.(chatTUI).View().Content
 }
@@ -218,7 +218,7 @@ func renderStatuslineViewWithEffort(t *testing.T, effort string) string {
 	t.Helper()
 
 	ctrl := control.New(control.Options{})
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
 	m.label = "deepseek-v4-flash"
 	m.effortLevel = effort
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})

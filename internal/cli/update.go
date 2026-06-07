@@ -249,3 +249,41 @@ func replaceSelf(newBin []byte) error {
 	}
 	return nil
 }
+
+const updateCacheTTL = 3 * time.Hour
+
+type updateCacheEntry struct {
+	Latest    string    `json:"latest"`
+	CheckedAt time.Time `json:"checked_at"`
+}
+
+func updateCachePath() string {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	return filepath.Join(dir, "roach-code", "update-check.json")
+}
+
+func readUpdateCache() (string, bool) {
+	data, err := os.ReadFile(updateCachePath())
+	if err != nil {
+		return "", false
+	}
+	var e updateCacheEntry
+	if err := json.Unmarshal(data, &e); err != nil {
+		return "", false
+	}
+	if time.Since(e.CheckedAt) > updateCacheTTL || e.Latest == "" {
+		return "", false
+	}
+	return e.Latest, true
+}
+
+func writeUpdateCache(latest string) {
+	path := updateCachePath()
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	e := updateCacheEntry{Latest: latest, CheckedAt: time.Now()}
+	data, _ := json.Marshal(e)
+	_ = os.WriteFile(path, data, 0o644)
+}

@@ -18,7 +18,7 @@ func (m chatTUI) renderWelcomeBanner() string {
 	if h <= 0 {
 		return ""
 	}
-	banner := strings.TrimRight(renderTUIBannerAt(m.label, m.missing, m.width, m.bannerPhase), "\n")
+	banner := strings.TrimRight(renderTUIBannerAt(m.label, m.missing, m.updateNotice, m.width, m.bannerPhase), "\n")
 	lines := strings.Split(banner, "\n")
 	rows := make([]string, h)
 	for i := range rows {
@@ -55,13 +55,13 @@ func replaySectionsFor(history []provider.Message, width int, renderer *mdRender
 
 // renderTUIBanner is the title + tip + optional missing-key warning printed once
 // at the top of the session.
-func renderTUIBanner(label, missing string, width int) string {
-	return renderTUIBannerAt(label, missing, width, -1)
+func renderTUIBanner(label, missing, updateNotice string, width int) string {
+	return renderTUIBannerAt(label, missing, updateNotice, width, -1)
 }
 
 // renderTUIBannerAt renders the startup banner; phase >= 0 sweeps the hero wordmark
 // with the ambient glow at that animation phase, phase < 0 is the frozen static art.
-func renderTUIBannerAt(label, missing string, width, phase int) string {
+func renderTUIBannerAt(label, missing, updateNotice string, width, phase int) string {
 	if width <= 0 {
 		width = 80
 	}
@@ -98,6 +98,9 @@ func renderTUIBannerAt(label, missing string, width, phase int) string {
 	}
 	if missing != "" {
 		b.WriteString(wrapForViewport(indent+"! "+missing, width, activeCLITheme.warn) + "\n")
+	}
+	if updateNotice != "" {
+		b.WriteString(wrapForViewport(indent+"▲ "+updateNotice, width, activeCLITheme.warn) + "\n")
 	}
 	return b.String()
 }
