@@ -383,9 +383,13 @@ func TestEffortCommandWritesCurrentDeepSeekProvider(t *testing.T) {
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
 
+	m.effortLevel = "auto"
 	cmd := m.runEffortCommand("/effort max")
 	if cmd == nil {
 		t.Fatal("/effort max should return a rebuild command")
+	}
+	if m.effortLevel != "max" {
+		t.Fatalf("effortLevel = %q, want max", m.effortLevel)
 	}
 
 	configPath := config.UserConfigPath()
@@ -395,6 +399,63 @@ func TestEffortCommandWritesCurrentDeepSeekProvider(t *testing.T) {
 	}
 	if !strings.Contains(string(body), `effort      = "max"`) {
 		t.Fatalf("saved config missing effort=max:\n%s", body)
+	}
+}
+
+func TestEffortCommandWritesProjectConfigAndSurvivesModelSwitchRefresh(t *testing.T) {
+	isolateUserConfig(t)
+	if err := os.WriteFile("roach-code.toml", []byte(`default_model = "codex"
+
+[[providers]]
+name           = "codex"
+kind           = "openai-responses"
+base_url       = "https://api.openai.com/v1"
+model          = "gpt-5.5"
+auth           = "oauth"
+context_window = 272000
+effort         = "medium"
+`), 0o644); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+
+	m := newTestChatTUI()
+	m.ctrl = control.New(control.Options{Label: "codex"})
+	m.label = "gpt-5.5"
+	m.modelRef = "codex/gpt-5.5"
+	m.effortLevel = "medium"
+	m.buildController = func(ref string, _ []provider.Message) (*control.Controller, error) {
+		if ref != "codex/gpt-5.5" {
+			t.Fatalf("build ref = %q, want codex/gpt-5.5", ref)
+		}
+		return control.New(control.Options{Label: "gpt-5.5"}), nil
+	}
+
+	cmd := m.runEffortCommand("/effort high")
+	if cmd == nil {
+		t.Fatal("/effort high should return a rebuild command")
+	}
+	if m.effortLevel != "high" {
+		t.Fatalf("immediate effortLevel = %q, want high", m.effortLevel)
+	}
+	body, err := os.ReadFile("roach-code.toml")
+	if err != nil {
+		t.Fatalf("read project config: %v", err)
+	}
+	if !strings.Contains(string(body), `effort      = "high"`) {
+		t.Fatalf("project config missing effort=high:\n%s", body)
+	}
+	if _, err := os.Stat(config.UserConfigPath()); !os.IsNotExist(err) {
+		t.Fatalf("project override should not write user config, stat err=%v", err)
+	}
+
+	msg, ok := cmd().(modelSwitchMsg)
+	if !ok {
+		t.Fatalf("effort command returned %T, want modelSwitchMsg", cmd())
+	}
+	updated, _ := m.update(msg)
+	m2 := updated.(chatTUI)
+	if m2.effortLevel != "high" {
+		t.Fatalf("post-switch effortLevel = %q, want high", m2.effortLevel)
 	}
 }
 
@@ -431,6 +492,9 @@ func TestEffortCommandAutoClearsProviderEffort(t *testing.T) {
 	}
 	if cmd := m.runEffortCommand("/effort auto"); cmd == nil {
 		t.Fatal("/effort auto should return a rebuild command")
+	}
+	if m.effortLevel != "auto" {
+		t.Fatalf("effortLevel = %q, want auto", m.effortLevel)
 	}
 	body, err := os.ReadFile(config.UserConfigPath())
 	if err != nil {
