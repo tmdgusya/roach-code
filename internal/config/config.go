@@ -34,6 +34,18 @@ type Config struct {
 	Codegraph    CodegraphConfig   `toml:"codegraph"`
 	Statusline   StatuslineConfig  `toml:"statusline"`
 	LSP          LSPConfig         `toml:"lsp"`
+	Workflow     WorkflowConfig    `toml:"workflow"`
+}
+
+// WorkflowConfig bounds the `run_workflow` tool's dynamic workflows. The caps
+// are enforced by the runtime, not the model's script. Zero values fall back to
+// safe defaults (see Default), so an absent [workflow] block still works. The
+// limits are deliberately lower than Claude Code's 16/1000 — roach-code drives
+// cheaper OpenAI-compatible models, so the right ceiling is a local choice.
+type WorkflowConfig struct {
+	MaxConcurrent int   `toml:"max_concurrent"` // simultaneous sub-agents; default 8
+	MaxAgents     int   `toml:"max_agents"`     // total agent() calls per run; default 200
+	MaxTokens     int64 `toml:"max_tokens"`     // output-token ceiling per run; 0 = no ceiling
 }
 
 // UIConfig controls presentation-only settings. Theme affects CLI rendering; the
@@ -500,6 +512,9 @@ func Default() *Config {
 		// a missing server yields an install hint rather than an error.
 		LSP:     LSPConfig{Enabled: true},
 		Network: NetworkConfig{ProxyMode: netclient.ModeAuto},
+		// Dynamic-workflow caps (run_workflow). Conservative defaults for the
+		// cheaper models roach-code typically drives; raise in [workflow] if needed.
+		Workflow: WorkflowConfig{MaxConcurrent: 8, MaxAgents: 200},
 		Providers: []ProviderEntry{
 			{Name: "deepseek-flash", Kind: "openai", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", APIKeyEnv: "DEEPSEEK_API_KEY", BalanceURL: "https://api.deepseek.com/user/balance", ContextWindow: 1_000_000, Price: &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 2, Currency: "¥"}},
 			{Name: "deepseek-pro", Kind: "openai", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-pro", APIKeyEnv: "DEEPSEEK_API_KEY", BalanceURL: "https://api.deepseek.com/user/balance", ContextWindow: 1_000_000, Price: &provider.Pricing{CacheHit: 0.025, Input: 3, Output: 6, Currency: "¥"}},

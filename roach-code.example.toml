@@ -134,6 +134,15 @@ effort         = "high"
 [tools]
 enabled = []   # empty = all built-in tools
 
+# Dynamic workflows: the run_workflow tool runs a JavaScript workflow the model
+# writes, fanning out over sub-agents whose intermediate results stay in script
+# variables (not the model's context). The runtime enforces these caps — the
+# script can't raise them. Omit the block to accept the defaults below.
+[workflow]
+max_concurrent = 8     # simultaneous sub-agents
+max_agents     = 200   # total agent() calls allowed per workflow run
+max_tokens     = 0     # output-token ceiling per run; 0 = no ceiling
+
 # CodeGraph code intelligence (symbol/call-graph search via tree-sitter + SQLite),
 # a built-in MCP server giving the agent codegraph_* search / context / explore /
 # trace / node tools. On by default. The runtime is fetched into a per-version

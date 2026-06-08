@@ -117,6 +117,16 @@ func bannerFrameTick() tea.Cmd {
 	return tea.Tick(time.Second/60, func(_ time.Time) tea.Msg { return bannerFrameMsg{} })
 }
 
+// ultragoalFrameMsg is one frame of the idle ultragoal preview shimmer.
+type ultragoalFrameMsg struct{}
+
+// ultragoalFrameTick paces the ultragoal preview banner's shimmer at ~30fps while
+// the composer holds the keyword. Like bannerFrameTick it only reschedules while
+// previewing, so the frame rate never persists past the preview.
+func ultragoalFrameTick() tea.Cmd {
+	return tea.Tick(time.Second/30, func(_ time.Time) tea.Msg { return ultragoalFrameMsg{} })
+}
+
 // updateCheckMsg carries the result of an async latest-release check.
 type updateCheckMsg struct {
 	latest string

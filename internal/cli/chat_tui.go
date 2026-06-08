@@ -108,6 +108,15 @@ type chatTUI struct {
 	// shimmerPhase advances once per spinner tick to animate the live thinking
 	// indicator's ▓▒░ sheen (ambient decoration only; see shimmer()).
 	shimmerPhase int
+	// ultragoalActive is true while a turn engaged via the `ultragoal` keyword
+	// runs, so View() glows the dynamic-workflow sparkle banner. Cleared on
+	// TurnDone (see chat_turn.go).
+	ultragoalActive bool
+	// ultragoalPhase advances the idle preview shimmer (the banner shown while the
+	// composer holds the keyword, before Enter); ultragoalTicking guards its tick
+	// loop so only one runs at a time. The running banner uses shimmerPhase instead.
+	ultragoalPhase   int
+	ultragoalTicking bool
 	// thoughts records every committed reasoning block (marker + text transcript
 	// indices plus the full raw text) so collapse is non-destructive: Ctrl+O toggles
 	// them all in place, and a pending approval force-expands the most recent one.
@@ -799,6 +808,20 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, finalize(m, cmds)
 			}
 
+			// "ultragoal <goal>" engages dynamic-workflow mode: a sparkle banner
+			// glows while the turn is steered to accomplish <goal> via run_workflow.
+			if task, ok := ultragoalTask(line); ok {
+				m.input.Reset()
+				m.input.SetHeight(1)
+				m.pastedBlocks = nil
+				if task == "" {
+					m.notice("ultragoal: type a goal — e.g. ultragoal review every .go file in internal/workflow")
+					return m, finalize(m, cmds)
+				}
+				cmds = append(cmds, m.startUltragoal(task))
+				return m, finalize(m, cmds)
+			}
+
 			// Slash commands run locally without going through the model. A
 			// '/'-leading line that's actually a dragged file path is an attachment,
 			// not a command, so it's rewritten to an @reference instead.
@@ -956,6 +979,19 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, elapsedTick())
 		}
 
+	case ultragoalFrameMsg:
+		// Idle preview shimmer: advance the phase and repaint while the composer
+		// still holds the keyword; stop the loop the instant it no longer does.
+		// ultragoalTicking is the single source of truth for "a loop is alive", so
+		// the kick below never double-schedules a second frame chain.
+		if m.ultragoalPreviewing() {
+			m.ultragoalPhase++
+			m.ultragoalTicking = true
+			cmds = append(cmds, ultragoalFrameTick())
+		} else {
+			m.ultragoalTicking = false
+		}
+
 	case bannerFrameMsg:
 		// Welcome-banner glow frame. The banner is rendered LIVE in View() from
 		// bannerPhase (a direct-render element, like the thinking line), so advancing
@@ -998,6 +1034,13 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, tea.ClearScreen)
 		}
 		m.inputHadWide = wide
+	}
+
+	// Light the idle ultragoal preview shimmer the moment the composer starts
+	// holding the keyword: kick its tick loop once (guarded so only one runs).
+	if m.ultragoalPreviewing() && !m.ultragoalTicking {
+		m.ultragoalTicking = true
+		cmds = append(cmds, ultragoalFrameTick())
 	}
 
 	return m, finalize(m, cmds)
@@ -1043,6 +1086,13 @@ func (m chatTUI) View() tea.View {
 		boxW = 10
 	}
 	box := inputBoxStyle.Width(boxW).Render(m.input.View())
+	// ultragoal glow: the composer's own frame shimmers while the keyword is held
+	// (idle preview) or while the engaged turn runs — the trigger lives in the
+	// input box itself, not a separate banner, so the status rows below are
+	// untouched (their height is unchanged, so the statusline never gets pushed off).
+	if m.ultragoalGlowing() {
+		box = shimmerInputBox(box, m.ultragoalGlowPhase())
+	}
 
 	var modeTag string
 	switch {

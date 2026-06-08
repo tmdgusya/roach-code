@@ -11,9 +11,12 @@
    injected by plugins. No hardcoded `switch model`.
 2. **Single static binary.** `CGO_ENABLED=0`; cross-compile with one command;
    CLI works out of the box.
-3. **Lean dependencies.** Standard library by default. A third-party dependency
-   must be pure-Go, lightweight, and must not compromise the single-binary /
-   cross-platform / distribution story. TOML parsing is the one accepted dependency.
+3. **Lean dependencies.** Prefer the standard library. A third-party dependency
+   must be pure-Go and must not compromise the single-binary / cross-platform /
+   distribution story — CGO-free and cross-compilable (`CGO_ENABLED=0`). Within
+   that bar, dependencies are accepted where they earn their keep: TOML parsing,
+   the Bubble Tea TUI stack, and the goja JavaScript runtime that executes
+   dynamic workflows (§3.10).
 4. **Two extension tiers.** Compile-time built-ins (self-register via `init()`),
    and runtime external plugins (stdio JSON-RPC subprocesses, MCP-compatible).
 5. **Interface-first & registry-based.** `Provider` and `Tool` are interfaces.
@@ -44,8 +47,13 @@ roach-code/
     ├── permission/          # per-call Policy: allow/ask/deny rules → Decision
     ├── command/             # custom slash commands loaded from .roach-code/commands/*.md
     ├── plugin/              # stdio JSON-RPC (MCP) client; adapts remote tools
-    └── agent/               # Session + harness loop
+    ├── agent/               # Session + harness loop; sub-agent machinery (task.go)
+    └── workflow/            # dynamic-workflow engine (goja) behind run_workflow
 ```
+
+> The tree lists the load-bearing packages; the kernel has grown others
+> (`control`, `event`, `jobs`, `skill`, `serve`, `acp`, `sandbox`, `billing`, …)
+> that this spec references inline where relevant.
 
 Dependency direction (acyclic): `cli → {agent, plugin, config} → {tool, provider}`.
 Built-in subpackages (`provider/openai`, `tool/builtin`) import their parent to
@@ -287,6 +295,50 @@ resolved and prepended to the message as a tagged block the model can read.
   completes, and MCP resources appear alongside top-level entries. The
   bottom-region menu changes height only on these discrete actions, never per
   streamed token, so scrollback stays clean (§ rendering).
+
+### 3.10 Dynamic workflows (`internal/workflow`)
+
+The `run_workflow` tool runs a **JavaScript workflow the model writes** on an
+embedded runtime (goja). The script's control flow *is* the dependency graph —
+`await` sequences dependent steps, `parallel`/`Promise.all` fans them out — so
+there is deliberately **no DAG data structure and no scheduler**. This is what a
+static spec couldn't express (loops, conditionals, data-dependent fan-out); it is
+the reason the runtime is an interpreter rather than a config format.
+
+- **Context offloading.** Each `agent(prompt, opts)` call spawns a sub-agent via
+  the existing `agent.RunSubAgent` (§3.4); intermediate results live in **script
+  variables, not the model's context window**. Only the script's return value
+  comes back as the tool result — the point of the feature.
+- **The engine owns only what the script must not.** A per-run `Engine` enforces
+  a concurrency semaphore (`max_concurrent`), an agent-count cap (`max_agents`),
+  and an output-token budget (`max_tokens`) — all from `[workflow]` config, all
+  re-derived for roach-code's cheaper models rather than copied from Claude
+  Code's 16/1000. The script cannot raise them.
+- **goja bridge.** The runtime is owned by one event-loop goroutine; each
+  `agent()` returns a `Promise` whose work runs on a worker goroutine and
+  resolves back onto the loop (`loop.RunOnLoop`), since goja is not
+  goroutine-safe. goja is pure-Go/CGO-free, so the single-binary story holds.
+- **Reuses the subagent surface.** Each `agent()` is emitted as a synthetic
+  `ToolDispatch`/`ToolResult` (nested via `Tool.ParentID`), so workflow agents
+  render in the existing subagent panel (§ TUI) with no new event kinds and no
+  frontend change. Sub-agent `Usage` events are summed into the token budget.
+- **Recursion barred.** Workflow agents inherit the parent tool set minus
+  `run_workflow` and the subagent meta-tools, so delegation stays one layer deep.
+- **Synchronous in v1.** `run_workflow` blocks within the turn; intermediates are
+  offloaded but the run is session-scoped (no daemon). Background execution and
+  cross-session resume are future work. See `docs/WORKFLOWS-PLAN.md`.
+- **`ultragoal` chat trigger.** Typing `ultragoal <goal>` (or `/ultragoal <goal>`)
+  in the chat TUI engages dynamic-workflow mode: the turn is steered to accomplish
+  `<goal>` via one `run_workflow` call (`internal/cli/chat_ultragoal.go`). The
+  **typed text in the composer glows** — every line (the typed characters and the
+  box's top/bottom rules) is repainted with a travelling shimmer crest the instant
+  the composer holds the keyword (an idle preview tick drives it), and keeps glowing
+  while the engaged turn runs (the spinner tick drives it). The glow only recolours
+  glyphs (ANSI-stripped then shimmered, real terminal cursor untouched) and
+  preserves each line's visible width, so the cursor and the bottom-region height
+  never drift — the status rows below stay put. The keyword is stripped at submit
+  time; only the clean goal shows in the transcript while the model receives a
+  steering preamble.
 
 ## 4. Data Types (`internal/provider`)
 

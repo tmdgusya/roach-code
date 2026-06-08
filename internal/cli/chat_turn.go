@@ -118,6 +118,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		if e.Kind == event.TurnDone {
 			m.turnDiscarded = false
 			m.state = tuiIdle
+			m.ultragoalActive = false
 		}
 		return
 	}
@@ -321,6 +322,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		// just clear the un-sendable flag.
 		m.confirmBubbleSent()
 		m.state = tuiIdle
+		m.ultragoalActive = false
 		m.clearSubmittedPastes()
 		if e.Err != nil && e.Err.Error() != "" && !strings.Contains(e.Err.Error(), "context canceled") {
 			m.commitLine(wrapForViewport(i18n.M.ErrorPrefix+" "+e.Err.Error(), m.width, activeCLITheme.warn))
