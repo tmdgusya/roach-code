@@ -951,7 +951,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case updateCheckMsg:
-		if msg.latest != "" && msg.latest != m.version {
+		if msg.latest != "" && versionNewer(m.version, msg.latest) {
 			m.updateNotice = fmt.Sprintf(i18n.M.UpdateAvailableFmt, msg.latest)
 		}
 

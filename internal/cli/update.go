@@ -52,7 +52,7 @@ func updateCommand(args []string, version string) int {
 	}
 
 	fmt.Printf("current: %s\nlatest:  %s\n", version, latest)
-	if version == latest {
+	if !versionNewer(version, latest) {
 		fmt.Println(green("already up to date"))
 		return 0
 	}

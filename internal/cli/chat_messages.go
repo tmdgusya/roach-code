@@ -130,7 +130,7 @@ type updateCheckMsg struct {
 func checkUpdateCmd(version string) tea.Cmd {
 	return func() tea.Msg {
 		if latest, ok := readUpdateCache(); ok {
-			if latest != version && latest != "" {
+			if versionNewer(version, latest) {
 				return updateCheckMsg{latest: latest}
 			}
 			return updateCheckMsg{}
@@ -142,7 +142,7 @@ func checkUpdateCmd(version string) tea.Cmd {
 			return updateCheckMsg{}
 		}
 		writeUpdateCache(latest)
-		if latest == version {
+		if !versionNewer(version, latest) {
 			return updateCheckMsg{}
 		}
 		return updateCheckMsg{latest: latest}
