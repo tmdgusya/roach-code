@@ -86,15 +86,24 @@ bin="$tmp/roach-code-${os}-${arch}/roach-code"
 
 mkdir -p "$INSTALL_DIR"
 install -m 0755 "$bin" "$INSTALL_DIR/roach-code" 2>/dev/null \
-  || { cp "$bin" "$INSTALL_DIR/roach-code" && chmod 0755 "$INSTALL_DIR/roach-code"; }
+  || { cp "$bin" "$INSTALL_DIR/roach-code" || err "could not write $INSTALL_DIR/roach-code"; chmod 0755 "$INSTALL_DIR/roach-code" || err "could not chmod $INSTALL_DIR/roach-code"; }
 
 # short alias: `roach` -> roach-code (symlink so `roach update` only touches one binary)
-ln -sf roach-code "$INSTALL_DIR/roach" 2>/dev/null \
-  || cp "$INSTALL_DIR/roach-code" "$INSTALL_DIR/roach"
+rm -f "$INSTALL_DIR/roach" || err "could not replace $INSTALL_DIR/roach"
+ln -s roach-code "$INSTALL_DIR/roach" 2>/dev/null \
+  || cp "$INSTALL_DIR/roach-code" "$INSTALL_DIR/roach" \
+  || err "could not create $INSTALL_DIR/roach"
+
+if [ "$os" = darwin ] && command -v xattr >/dev/null 2>&1; then
+  xattr -d com.apple.quarantine "$INSTALL_DIR" "$INSTALL_DIR/roach-code" "$INSTALL_DIR/roach" 2>/dev/null || true
+  xattr -d com.apple.provenance "$INSTALL_DIR" "$INSTALL_DIR/roach-code" "$INSTALL_DIR/roach" 2>/dev/null || true
+fi
+
+"$INSTALL_DIR/roach" version >/dev/null || err "installed roach failed to run"
 
 printf 'install: roach-code -> %s/roach-code  (short alias: roach)\n' "$INSTALL_DIR"
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *) printf 'install: add it to PATH:  export PATH="%s:$PATH"\n' "$INSTALL_DIR" ;;
 esac
-"$INSTALL_DIR/roach-code" version 2>/dev/null || true
+"$INSTALL_DIR/roach" version

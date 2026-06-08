@@ -69,9 +69,13 @@ irm https://raw.githubusercontent.com/tmdgusya/roach-code/main/install.ps1 | iex
 ### 소스에서 빌드
 
 ```sh
-make build      # -> bin/roach-code
+make build      # -> bin/roach-code + bin/roach
+make install    # -> ${ROACH_INSTALL_DIR:-$HOME/.local/bin}/roach-code + roach
 make cross      # -> dist/ (darwin|linux|windows × amd64|arm64)
 ```
+
+로컬 빌드는 짧은 별칭 `bin/roach`도 만듭니다. `make install`은 `roach-code`와
+`roach`를 `${ROACH_INSTALL_DIR:-$HOME/.local/bin}`로 복사합니다.
 
 ## 빠른 시작
 

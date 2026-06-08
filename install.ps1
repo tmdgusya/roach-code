@@ -85,6 +85,7 @@ try {
     '@echo off',
     '"%~dp0roach-code.exe" %*'
   )
+  & $shim version | Out-Null
   Write-Host "install: roach-code -> $dest  (short alias: roach)"
 } finally {
   Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue

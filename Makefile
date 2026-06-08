@@ -5,11 +5,29 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 # with any change to the integration in internal/codegraph.
 CODEGRAPH_VERSION := v0.9.7
 
-.PHONY: build vet fmt test hooks cross clean e2e-codegraph
+.PHONY: build install vet fmt test hooks cross clean e2e-codegraph
 
 build:
+	@mkdir -p bin
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/roach-code ./cmd/roach-code
+	@ln -sf roach-code bin/roach 2>/dev/null || cp bin/roach-code bin/roach
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/roach-code-plugin-example ./cmd/roach-code-plugin-example
+
+install: build
+	@dir="$${ROACH_INSTALL_DIR:-$$HOME/.local/bin}"; \
+	mkdir -p "$$dir"; \
+	if ! install -m 0755 bin/roach-code "$$dir/roach-code" 2>/dev/null; then \
+		cp bin/roach-code "$$dir/roach-code" || exit 1; \
+		chmod 0755 "$$dir/roach-code" || exit 1; \
+	fi; \
+	rm -f "$$dir/roach" || exit 1; \
+	ln -s roach-code "$$dir/roach" 2>/dev/null || cp "$$dir/roach-code" "$$dir/roach" || exit 1; \
+	if [ "$$(uname -s)" = Darwin ] && command -v xattr >/dev/null 2>&1; then \
+		xattr -d com.apple.quarantine "$$dir" "$$dir/roach-code" "$$dir/roach" 2>/dev/null || true; \
+		xattr -d com.apple.provenance "$$dir" "$$dir/roach-code" "$$dir/roach" 2>/dev/null || true; \
+	fi; \
+	"$$dir/roach" version >/dev/null || exit 1; \
+	printf 'installed: %s/roach-code (alias: %s/roach)\n' "$$dir" "$$dir"
 
 vet:
 	go vet ./...
