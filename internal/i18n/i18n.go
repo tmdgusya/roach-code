@@ -152,7 +152,8 @@ type Messages struct {
 	CmdEffort       string // /effort
 	CmdHelp         string // /help
 	CmdTodo         string // /todo
-	CmdQuit         string // /quit (also accepts /exit as hidden alias)
+	CmdQuit         string // /quit
+	CmdExit         string // /exit (alias of /quit)
 	ArgSkillList    string // /skill list
 	ArgSkillShow    string // /skill show
 	ArgSkillNew     string // /skill new
