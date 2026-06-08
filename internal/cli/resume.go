@@ -108,7 +108,7 @@ func (m *chatTUI) resumeArgItems(val string) ([]compItem, int, bool) {
 			continue
 		}
 		hint := fmt.Sprintf("%s · %s", s.ModTime.Local().Format("01-02 15:04"), sessionSummary(s))
-		out = append(out, compItem{label: idx, insert: idx, hint: hint})
+		out = append(out, compItem{label: idx, insert: idx, hint: hint, meta: s.Path})
 	}
 	return out, from, true
 }

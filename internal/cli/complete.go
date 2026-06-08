@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -30,6 +31,10 @@ type compItem struct {
 	insert  string
 	hint    string
 	descend bool
+	// meta carries opaque per-item data for menus that need it — currently the
+	// session file path for "/resume <n>" rows, so the menu can preview the
+	// highlighted session without re-deriving it from the index.
+	meta string
 }
 
 // completion is the live autocomplete menu state. Empty value = inactive.
@@ -101,6 +106,10 @@ func (m *chatTUI) slashItems() []compItem {
 // while the line is a single "/word" token, or an @-reference menu while the
 // token under the cursor is "@…".
 func (m *chatTUI) updateCompletion() {
+	// Whatever menu we end up showing (or none), keep the /resume preview in sync
+	// with the final selection — runs after every return path below.
+	defer m.refreshResumeArgPreview()
+
 	val := m.input.Value()
 	cursor := m.inputCursorOffset()
 
@@ -441,6 +450,43 @@ func (m *chatTUI) moveCompletion(delta int) {
 		return
 	}
 	m.completion.sel = ((m.completion.sel+delta)%n + n) % n
+	m.refreshResumeArgPreview()
+}
+
+// isResumeArgCompletion reports whether the open menu is "/resume"'s numbered
+// session argument — the only completion that carries a transcript preview. It's
+// a cheap string check so render can call it every frame without touching disk.
+func (m chatTUI) isResumeArgCompletion() bool {
+	if !m.completion.active || m.completion.kind != compSlashArg {
+		return false
+	}
+	val := m.input.Value()
+	cmdEnd := strings.IndexAny(val, " \t")
+	return cmdEnd >= 0 && val[:cmdEnd] == "/resume"
+}
+
+// refreshResumeArgPreview recomputes the cached transcript preview for the
+// highlighted "/resume <n>" row whenever the selection (or which menu is open)
+// changes. The session path rides on the compItem's meta, so this never rescans
+// the session directory; it only re-reads from disk when the highlighted session
+// or width actually changes (keyed by "path|width"). For any other menu it clears
+// the cache so a stale preview can't leak into, say, the @-file menu.
+func (m *chatTUI) refreshResumeArgPreview() {
+	if !m.isResumeArgCompletion() || m.completion.sel < 0 || m.completion.sel >= len(m.completion.items) {
+		m.resumeArgPvKey, m.resumeArgPvText = "", ""
+		return
+	}
+	path := m.completion.items[m.completion.sel].meta
+	if path == "" {
+		m.resumeArgPvKey, m.resumeArgPvText = "", ""
+		return
+	}
+	key := path + "|" + strconv.Itoa(m.width)
+	if key == m.resumeArgPvKey {
+		return
+	}
+	m.resumeArgPvKey = key
+	m.resumeArgPvText = sessionPreview(path, m.width, m.renderer)
 }
 
 // acceptCompletion applies the selected item to the input, then recomputes the
@@ -533,6 +579,13 @@ func (m chatTUI) renderCompletion() string {
 			b.WriteString("  " + dim(it.hint))
 		}
 		b.WriteByte('\n')
+	}
+	// For "/resume <n>", show the highlighted session's transcript inline so its
+	// data appears as the selection moves — not only after the command is run.
+	if m.isResumeArgCompletion() && m.resumeArgPvText != "" {
+		w := max(m.width, 10)
+		b.WriteString(dim(strings.Repeat("─", min(w-2, 40))) + "\n")
+		b.WriteString(m.resumeArgPvText + "\n")
 	}
 	// A key-hint footer so users discover Tab — many won't know it accepts a
 	// completion, let alone descends into a folder.
