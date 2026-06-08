@@ -1,5 +1,6 @@
 // Package config loads Roach Code's runtime configuration from TOML. Resolution order:
-// flag > project ./roach-code.toml > user ~/.config/roach-code/config.toml > built-in defaults.
+// flag > project ./roach-code.toml > user ~/.config/roach-code/config.toml >
+// legacy user ~/roach-code.toml > built-in defaults.
 // Secrets come from the environment via api_key_env and are never stored in
 // config files.
 package config
@@ -535,8 +536,10 @@ func Load() (*Config, error) {
 	cfg := Default()
 
 	var tomlSources []string
-	if uc := userConfigPath(); uc != "" {
+	if uc := existingUserConfigPath(); uc != "" {
 		tomlSources = append(tomlSources, uc)
+	} else if hc := homeConfigPath(); hc != "" {
+		tomlSources = append(tomlSources, hc)
 	}
 	tomlSources = append(tomlSources, "roach-code.toml")
 	for _, path := range tomlSources {
@@ -627,6 +630,17 @@ func mergeFile(cfg *Config, path string) error {
 }
 
 func userConfigPath() string {
+	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
+		return filepath.Join(dir, "roach-code", "config.toml")
+	}
+	dir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, ".config", "roach-code", "config.toml")
+}
+
+func osUserConfigPath() string {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return ""
@@ -634,8 +648,45 @@ func userConfigPath() string {
 	return filepath.Join(dir, "roach-code", "config.toml")
 }
 
-// UserConfigPath is the user-global config file (~/.config/roach-code/config.toml),
-// or "" when the user config dir can't be resolved.
+func userConfigCandidates() []string {
+	var paths []string
+	if p := userConfigPath(); p != "" {
+		paths = append(paths, p)
+	}
+	if p := osUserConfigPath(); p != "" && !containsString(paths, p) {
+		paths = append(paths, p)
+	}
+	return paths
+}
+
+func existingUserConfigPath() string {
+	for _, p := range userConfigCandidates() {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+func containsString(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
+}
+
+func homeConfigPath() string {
+	dir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "roach-code.toml")
+}
+
+// UserConfigPath is the primary user-global config file (~/.config/roach-code/config.toml),
+// or "" when the home/user config dir can't be resolved.
 func UserConfigPath() string { return userConfigPath() }
 
 // ArchiveDir is where compacted conversation history is archived for
@@ -728,9 +779,12 @@ func SourcePath() string {
 	if _, err := os.Stat("roach-code.toml"); err == nil {
 		return "roach-code.toml"
 	}
-	if uc := userConfigPath(); uc != "" {
-		if _, err := os.Stat(uc); err == nil {
-			return uc
+	if uc := existingUserConfigPath(); uc != "" {
+		return uc
+	}
+	if hc := homeConfigPath(); hc != "" {
+		if _, err := os.Stat(hc); err == nil {
+			return hc
 		}
 	}
 	return ""

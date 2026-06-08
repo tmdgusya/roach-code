@@ -67,9 +67,13 @@ irm https://raw.githubusercontent.com/tmdgusya/roach-code/main/install.ps1 | iex
 ### 从源码构建
 
 ```sh
-make build      # -> bin/roach-code
+make build      # -> bin/roach-code + bin/roach
+make install    # -> ${ROACH_INSTALL_DIR:-$HOME/.local/bin}/roach-code + roach
 make cross      # -> dist/（darwin|linux|windows × amd64|arm64）
 ```
+
+本地构建也会创建短别名 `bin/roach`；`make install` 会把 `roach-code` 和
+`roach` 复制到 `${ROACH_INSTALL_DIR:-$HOME/.local/bin}`。
 
 ## 快速开始
 

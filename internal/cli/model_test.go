@@ -10,6 +10,7 @@ import (
 // only those whose provider API key is set.
 func TestModelRefsFromConfig(t *testing.T) {
 	t.Chdir(t.TempDir()) // no roach-code.toml → built-in default providers
+	t.Setenv("HOME", t.TempDir())
 	// Only DeepSeek keyed → MiMo refs must be filtered out.
 	t.Setenv("DEEPSEEK_API_KEY", "test-key")
 	t.Setenv("MIMO_API_KEY", "")
@@ -31,6 +32,7 @@ func TestModelRefsFromConfig(t *testing.T) {
 // picker offers nothing rather than listing models the user can't select.
 func TestModelRefsSkipsUnconfigured(t *testing.T) {
 	t.Chdir(t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("DEEPSEEK_API_KEY", "")
 	t.Setenv("MIMO_API_KEY", "")
 	t.Setenv("MINIMAX_API_KEY", "")
@@ -50,6 +52,7 @@ func TestModelRefsSkipsUnconfigured(t *testing.T) {
 // through the shared completion path.
 func TestModelArgCompletion(t *testing.T) {
 	t.Chdir(t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("DEEPSEEK_API_KEY", "test-key")
 	m := newTestChatTUI()
 	items, _, ok := m.slashArgItems("/model ")

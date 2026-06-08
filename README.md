@@ -70,9 +70,13 @@ installed? `roach update` pulls the latest release.
 ### Build from source
 
 ```sh
-make build      # -> bin/roach-code
+make build      # -> bin/roach-code + bin/roach
+make install    # -> ${ROACH_INSTALL_DIR:-$HOME/.local/bin}/roach-code + roach
 make cross      # -> dist/ (darwin|linux|windows × amd64|arm64)
 ```
+
+Local builds also create the short alias `bin/roach`; `make install` copies both
+`roach-code` and `roach` to `${ROACH_INSTALL_DIR:-$HOME/.local/bin}`.
 
 ## Quick start
 
