@@ -38,6 +38,7 @@ import (
 	"roach-code/internal/skill"
 	"roach-code/internal/tool"
 	"roach-code/internal/tool/builtin"
+	"roach-code/internal/workflow"
 )
 
 // ErrUnknownModel is returned by Build when the configured model can't be
@@ -347,6 +348,25 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	// executor uses, so the model surfaces it like any other tool.
 	reg.Add(agent.NewTaskTool(execProv, entry.Price, reg, maxSteps,
 		entry.ContextWindow, cfg.Agent.Temperature, config.ArchiveDir(), "", headlessGate))
+
+	// The `run_workflow` tool runs model-authored dynamic workflows that fan out
+	// over the same sub-agent machinery. Wired here so its agents inherit the full
+	// tool set (FilterRegistry drops run_workflow + meta-tools to bar recursion)
+	// and the headless gate. Caps come from [workflow]; the engine normalizes them.
+	reg.Add(workflow.NewWorkflowTool(workflow.Env{
+		Prov:          execProv,
+		Pricing:       entry.Price,
+		ParentReg:     reg,
+		MaxSteps:      maxSteps,
+		ContextWindow: entry.ContextWindow,
+		Temperature:   cfg.Agent.Temperature,
+		ArchiveDir:    config.ArchiveDir(),
+		Gate:          headlessGate,
+	}, workflow.Caps{
+		MaxConcurrent: cfg.Workflow.MaxConcurrent,
+		MaxAgents:     cfg.Workflow.MaxAgents,
+		MaxTokens:     cfg.Workflow.MaxTokens,
+	}))
 
 	// The `remember` tool lets the model persist durable facts to the project's
 	// auto-memory store; `forget` prunes ones that turn out wrong. The saved index

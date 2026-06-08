@@ -20,6 +20,7 @@ import (
 	"roach-code/internal/sandbox"
 	"roach-code/internal/tool"
 	"roach-code/internal/tool/builtin"
+	"roach-code/internal/workflow"
 )
 
 // acpCommand runs Roach Code as an Agent Client Protocol agent: a stdio JSON-RPC
@@ -139,6 +140,22 @@ func (f *acpFactory) NewSession(ctx context.Context, p acp.SessionParams) (*cont
 	headlessGate := permission.NewGate(policy, nil)
 	reg.Add(agent.NewTaskTool(execProv, entry.Price, reg, maxSteps,
 		entry.ContextWindow, cfg.Agent.Temperature, config.ArchiveDir(), "", headlessGate))
+
+	// run_workflow: dynamic workflows over the same sub-agent machinery (see boot).
+	reg.Add(workflow.NewWorkflowTool(workflow.Env{
+		Prov:          execProv,
+		Pricing:       entry.Price,
+		ParentReg:     reg,
+		MaxSteps:      maxSteps,
+		ContextWindow: entry.ContextWindow,
+		Temperature:   cfg.Agent.Temperature,
+		ArchiveDir:    config.ArchiveDir(),
+		Gate:          headlessGate,
+	}, workflow.Caps{
+		MaxConcurrent: cfg.Workflow.MaxConcurrent,
+		MaxAgents:     cfg.Workflow.MaxAgents,
+		MaxTokens:     cfg.Workflow.MaxTokens,
+	}))
 
 	executor := agent.New(execProv, reg, agent.NewSession(sysPrompt), agent.Options{
 		MaxSteps:      maxSteps,
