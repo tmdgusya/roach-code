@@ -46,7 +46,10 @@ func (m *chatTUI) runEffortCommand(input string) tea.Cmd {
 		return nil
 	}
 
-	path := config.UserConfigPath()
+	path := config.SourcePath()
+	if path == "" {
+		path = config.UserConfigPath()
+	}
 	if path == "" {
 		m.notice("effort: cannot resolve user config directory")
 		return nil
@@ -77,6 +80,10 @@ func (m *chatTUI) runEffortCommand(input string) tea.Cmd {
 	if display == "" {
 		display = "auto"
 	}
+	// Keep the statusline in sync with the saved config immediately. The
+	// controller rebuild below runs asynchronously, so waiting for the model switch
+	// completion would leave the old effort visible for at least one render.
+	m.effortLevel = display
 	m.notice(fmt.Sprintf("setting effort for %s to %s…", entry.Name, display))
 	carried := m.ctrl.History()
 	if err := m.ctrl.Snapshot(); err != nil {
