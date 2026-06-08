@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -96,6 +97,58 @@ func TestResumePickerNavigateAndSelect(t *testing.T) {
 	}
 }
 
+// TestResumePickerPreviewsOnSelection proves the picker renders the highlighted
+// session's transcript immediately — before Enter — and that moving the selection
+// swaps the preview to the newly highlighted session.
+func TestResumePickerPreviewsOnSelection(t *testing.T) {
+	dir := t.TempDir()
+	aPath := filepath.Join(dir, "a.jsonl")
+	saveTestSession(t, aPath, "FIRST-SESSION-PREVIEW")
+	bPath := filepath.Join(dir, "b.jsonl")
+	saveTestSession(t, bPath, "SECOND-SESSION-PREVIEW")
+	now := time.Now()
+	if err := os.Chtimes(aPath, now.Add(-2*time.Second), now.Add(-2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(bPath, now, now); err != nil {
+		t.Fatal(err)
+	}
+
+	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	m := newTestChatTUI()
+	m.width = 80
+	m.ctrl = control.New(control.Options{Executor: exec, SessionDir: dir, Label: "test"})
+
+	m.runSlashCommand("/resume")
+	if m.resumePick == nil {
+		t.Fatal("bare /resume should open the picker")
+	}
+
+	// Default selection is the most recent session (b.jsonl); its data must show
+	// in the rendered picker without pressing Enter.
+	// The preview renders the message as a "› " bubble; the list shows it as a
+	// "N turns · …" label, so match the bubble form to tell them apart.
+	panel := m.renderResumePicker()
+	if !strings.Contains(panel, "› SECOND-SESSION-PREVIEW") {
+		t.Fatalf("picker should preview the selected session immediately:\n%s", panel)
+	}
+	if strings.Contains(panel, "› FIRST-SESSION-PREVIEW") {
+		t.Fatalf("picker should not preview the unselected session:\n%s", panel)
+	}
+	// The controller must NOT have switched — preview is read-only until Enter.
+	if got := m.ctrl.SessionPath(); got == bPath {
+		t.Fatal("rendering the preview must not switch the active session")
+	}
+
+	// Moving the selection down swaps the preview to the other session.
+	next, _ := m.handleResumePickerKey(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = next.(chatTUI)
+	panel = m.renderResumePicker()
+	if !strings.Contains(panel, "FIRST-SESSION-PREVIEW") {
+		t.Fatalf("preview should follow selection to the other session:\n%s", panel)
+	}
+}
+
 // TestResumePickerEscDismisses proves pressing Esc closes the picker without
 // switching sessions.
 func TestResumePickerEscDismisses(t *testing.T) {
@@ -186,6 +239,125 @@ func TestResumeArgCompletionListsSessions(t *testing.T) {
 	}
 	if got := labels(m.completion.items); len(got) != 2 || got[0] != "1" || got[1] != "2" {
 		t.Fatalf("resume completion = %v, want [1 2]", got)
+	}
+}
+
+// TestResumeArgCompletionPreviewsSelection proves the "/resume <n>" completion
+// menu renders the highlighted session's transcript inline, and that the preview
+// follows the selection — so session data shows on selection, not only after the
+// command runs.
+func TestResumeArgCompletionPreviewsSelection(t *testing.T) {
+	dir := t.TempDir()
+	aPath := filepath.Join(dir, "a.jsonl")
+	saveTestSession(t, aPath, "FIRST-ARG-PREVIEW")
+	bPath := filepath.Join(dir, "b.jsonl")
+	saveTestSession(t, bPath, "SECOND-ARG-PREVIEW")
+	now := time.Now()
+	if err := os.Chtimes(aPath, now.Add(-2*time.Second), now.Add(-2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(bPath, now, now); err != nil {
+		t.Fatal(err)
+	}
+
+	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	m := newTestChatTUI()
+	m.width = 80
+	m.ctrl = control.New(control.Options{Executor: exec, SessionDir: dir, Label: "test"})
+
+	m.input.SetValue("/resume ")
+	m.updateCompletion()
+	if !m.isResumeArgCompletion() {
+		t.Fatalf("/resume should open the arg completion: %+v", m.completion)
+	}
+
+	// Index 1 (default selection) is the most recent session (b.jsonl): its data
+	// must appear in the rendered menu without running the command. The preview
+	// renders as a "› " bubble; the list row uses "N turns · …", so match the bubble.
+	menu := m.renderCompletion()
+	if !strings.Contains(menu, "› SECOND-ARG-PREVIEW") {
+		t.Fatalf("completion should preview the selected session:\n%s", menu)
+	}
+	if strings.Contains(menu, "› FIRST-ARG-PREVIEW") {
+		t.Fatalf("completion should not preview the unselected session:\n%s", menu)
+	}
+
+	// Moving down to index 2 swaps the preview to the other session.
+	m.moveCompletion(1)
+	menu = m.renderCompletion()
+	if !strings.Contains(menu, "› FIRST-ARG-PREVIEW") {
+		t.Fatalf("preview should follow selection to the other session:\n%s", menu)
+	}
+}
+
+// TestResumeArgCompletionEnterResumes proves that pressing Enter on a highlighted
+// session in the "/resume" completion resumes it in a single press — even when its
+// index (e.g. "1") is a prefix of another ("10"), which previously trapped Enter
+// into endlessly re-accepting the number instead of running the command.
+func TestResumeArgCompletionEnterResumes(t *testing.T) {
+	dir := t.TempDir()
+	// 11 sessions → the menu caps at 10, so indices run 1..10 and "1" is a prefix
+	// of "10". newest is index 1.
+	var newest string
+	base := time.Now()
+	for i := 0; i < 11; i++ {
+		p := filepath.Join(dir, fmt.Sprintf("s%02d.jsonl", i))
+		saveTestSession(t, p, fmt.Sprintf("SESSION-CONTENT-%02d", i))
+		mt := base.Add(time.Duration(i) * time.Second) // later i = more recent
+		if err := os.Chtimes(p, mt, mt); err != nil {
+			t.Fatal(err)
+		}
+		newest = p
+	}
+
+	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	ctrl := control.New(control.Options{Executor: exec, SessionDir: dir, Label: "test"})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
+	m.input.SetValue("/resume ")
+	m.updateCompletion()
+	if !m.isResumeArgCompletion() {
+		t.Fatalf("expected /resume arg completion, got %+v", m.completion)
+	}
+	if len(m.completion.items) != resumeListCap {
+		t.Fatalf("expected %d capped items, got %d", resumeListCap, len(m.completion.items))
+	}
+
+	// Default selection is index 1 (the newest session). One Enter resumes it.
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(chatTUI)
+
+	if got := ctrl.SessionPath(); got != newest {
+		t.Fatalf("Enter should resume the highlighted session: path=%q want %q", got, newest)
+	}
+	if out := strings.Join(m.transcript, "\n"); !strings.Contains(out, "SESSION-CONTENT-10") {
+		t.Fatalf("resumed transcript should replay the session:\n%s", out)
+	}
+	if m.completion.active {
+		t.Fatal("completion should close after resuming")
+	}
+}
+
+// TestResumeFromWelcomeShowsTranscript proves resuming straight from the fresh
+// welcome screen (bannerLive=true) surfaces the replayed history: View renders the
+// live banner instead of the viewport while bannerLive holds, so the replay must
+// clear it or the resumed conversation stays invisible (the empty-screen bug).
+func TestResumeFromWelcomeShowsTranscript(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "s.jsonl")
+	saveTestSession(t, target, "WELCOME-RESUME-CONTENT")
+
+	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	ctrl := control.New(control.Options{Executor: exec, SessionDir: dir, Label: "test"})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
+	m.bannerLive = true // fresh welcome screen, as on a just-started session
+
+	m.runResumeCommand("/resume 1")
+
+	if m.bannerLive {
+		t.Fatal("resume must freeze the live welcome banner so the transcript shows")
+	}
+	if out := strings.Join(m.transcript, "\n"); !strings.Contains(out, "WELCOME-RESUME-CONTENT") {
+		t.Fatalf("resumed history should be in the transcript:\n%s", out)
 	}
 }
 

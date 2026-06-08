@@ -225,6 +225,12 @@ type chatTUI struct {
 	// resumePick is the interactive "/resume" session picker overlay. Non-nil
 	// while the user browses saved sessions with ↑/↓ and confirms with Enter.
 	resumePick *resumePicker
+	// resumeArgPvKey/resumeArgPvText cache the transcript preview shown beneath
+	// the "/resume <n>" argument completion, so navigating that menu doesn't
+	// re-read the highlighted session from disk on every keystroke. The key is
+	// "path|width"; both clear when the completion isn't /resume's argument.
+	resumeArgPvKey  string
+	resumeArgPvText string
 	// jobsPick is the interactive "/jobs" background-task roster. It mirrors
 	// Qwen's task dialog within roach-code's existing bottom-panel UI.
 	jobsPick *jobsPicker
@@ -626,6 +632,17 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.moveCompletion(1)
 				return m, nil
 			case "tab", "enter":
+				// Enter on a highlighted "/resume <n>" session is terminal — choosing
+				// the session IS the action — so accept the index AND submit in one
+				// press. Before, Enter only filled the number (and with "1" a prefix of
+				// "10" the menu even re-captured it), so it looked like nothing happened.
+				// Tab still just inserts, for anyone who wants to edit before running.
+				if msg.String() == "enter" && m.isResumeArgCompletion() && m.completion.sel < len(m.completion.items) {
+					m.acceptCompletion()
+					m.completion = completion{} // accept may have re-filtered; force-close
+					m.resumeArgPvKey, m.resumeArgPvText = "", ""
+					break // fall through to regular Enter → runSlashCommand("/resume N")
+				}
 				// When Enter is pressed and the completion has exactly one item
 				// already fully present in the input, close the menu and let Enter
 				// fall through to submit the command (/resume 3 → resume session 3).

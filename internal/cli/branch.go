@@ -105,6 +105,13 @@ func (m *chatTUI) replayActiveBranch(title string) {
 	m.bubblePending = false
 	m.turnDiscarded = false
 
+	// Resuming/branching straight from the fresh welcome screen: the live banner is
+	// still up and View renders it INSTEAD of the transcript while bannerLive holds,
+	// so the history we're about to commit would stay invisible. Freeze it (we emit
+	// our own banner below) and force a re-feed so the viewport shows the replay.
+	m.bannerLive = false
+	m.transcriptDirty = true
+
 	m.commitLine("")
 	if title != "" {
 		m.commitLine(dim("  -- " + title + " --"))
