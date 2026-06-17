@@ -324,6 +324,15 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		m.state = tuiIdle
 		m.ultragoalActive = false
 		m.clearSubmittedPastes()
+		// Sweep any subagent rows still in the map. A turn reaching TurnDone is
+		// over, so anything still live is stale — a missed terminal event, a
+		// late Usage/child dispatch after summarizeSubagentResult, or a cancelled
+		// turn. Without this, the panel renders "live N running" with ticking
+		// durations forever (#25).
+		m.ensureSubagentRuns()
+		for id := range m.subagents {
+			delete(m.subagents, id)
+		}
 		if e.Err != nil && e.Err.Error() != "" && !strings.Contains(e.Err.Error(), "context canceled") {
 			m.commitLine(wrapForViewport(i18n.M.ErrorPrefix+" "+e.Err.Error(), m.width, activeCLITheme.warn))
 		}

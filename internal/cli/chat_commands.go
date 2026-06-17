@@ -42,6 +42,12 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 		m.reasoning.Reset()
 		m.todoArgs = ""
 		m.chooser = nil
+		// Prior session's subagent rows are stale — clear them so the fresh
+		// session's panel doesn't show "live N running" with ghosts (#25).
+		m.ensureSubagentRuns()
+		for id := range m.subagents {
+			delete(m.subagents, id)
+		}
 		m.commitLine("")
 		m.commitLine(strings.TrimRight(renderTUIBanner(m.label, "", "", m.width), "\n"))
 		m.notice(i18n.M.SlashNewDone)

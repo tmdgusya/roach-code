@@ -104,6 +104,12 @@ func (m *chatTUI) replayActiveBranch(title string) {
 	m.pendingApproval = nil
 	m.bubblePending = false
 	m.turnDiscarded = false
+	// Replay replaces the transcript with another branch's history; any live
+	// subagent rows from the prior branch are stale, so drop them (#25).
+	m.ensureSubagentRuns()
+	for id := range m.subagents {
+		delete(m.subagents, id)
+	}
 
 	// Resuming/branching straight from the fresh welcome screen: the live banner is
 	// still up and View renders it INSTEAD of the transcript while bannerLive holds,

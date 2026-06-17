@@ -66,19 +66,15 @@ func (m *chatTUI) renderSubagentChildDispatch(t event.Tool) {
 	}
 	m.ensureSubagentRuns()
 	run := m.subagents[t.ParentID]
-	if run == nil {
-		run = &subagentRun{
-			id:      t.ParentID,
-			name:    "task",
-			label:   "subagent",
-			lineIdx: -1,
-			started: time.Now(),
-		}
-		m.subagents[t.ParentID] = run
+	// Don't auto-create a stub here. The parent's ToolDispatch is the
+	// authoritative creation point; a child arriving without a parent entry
+	// means the parent already terminated (or its dispatch was missed), and
+	// recreating a row would leak a phantom that never clears (#25).
+	if run != nil {
+		run.toolCalls++
+		run.activity = subagentActivity(t)
+		m.clearReadRollupFor(t.ParentID)
 	}
-	run.toolCalls++
-	run.activity = subagentActivity(t)
-	m.clearReadRollupFor(t.ParentID)
 	m.commitLine(subagentChildToolCard(t.Name, t.Args, m.width))
 	m.beginToolRunningWithPrefix(t.ID, "  │ ")
 }
@@ -122,15 +118,12 @@ func (m *chatTUI) recordSubagentUsage(parentID string, totalTokens int) {
 	}
 	m.ensureSubagentRuns()
 	run := m.subagents[parentID]
+	// Don't auto-create. A usage event for an unknown parent is stale (the
+	// subagent already terminated and summarizeSubagentResult deleted the row);
+	// recreating it here would leave a phantom whose "started" clock ticks up
+	// forever on every repaint (#25).
 	if run == nil {
-		run = &subagentRun{
-			id:      parentID,
-			name:    "task",
-			label:   "subagent",
-			lineIdx: -1,
-			started: time.Now(),
-		}
-		m.subagents[parentID] = run
+		return
 	}
 	run.tokens += totalTokens
 }
@@ -141,15 +134,11 @@ func (m *chatTUI) markSubagentAwaitingApproval(parentID string, a event.Approval
 	}
 	m.ensureSubagentRuns()
 	run := m.subagents[parentID]
+	// Don't auto-create. An approval for an unknown parent is stale (the parent
+	// already terminated); recreating it would leak a phantom row that never
+	// clears (#25). The dispatch event remains the authoritative creation point.
 	if run == nil {
-		run = &subagentRun{
-			id:      parentID,
-			name:    "task",
-			label:   "subagent",
-			lineIdx: -1,
-			started: time.Now(),
-		}
-		m.subagents[parentID] = run
+		return
 	}
 	subject := sanitizeSubagentText(a.Subject)
 	if subject != "" {
