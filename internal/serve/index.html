@@ -451,7 +451,8 @@ function setRunning(on) {
   statusDotSidebar.className=statusDot.className;
   statusText.textContent=on?'Thinking...':'Ready';
   if(on){turnStartAt=Date.now();turnTokens=0;tickTimer=setInterval(()=>{
-    const ms=Date.now()-turnStartAt; const tok=turnTokens>0?' · ↓ '+fmtTok(turnTokens)+' tok':'';
+    const ms=Date.now()-turnStartAt; const s=Math.floor(ms/1000);
+    let tok=''; if(turnTokens>0){tok=' · ↓ '+fmtTok(turnTokens)+' tok'; const tps=s>0?turnTokens/s:0; if(tps>=1){tok+=' @ '+fmtTok(Math.round(tps))+'/s';}}
     turnInfo.textContent=fmtElapsed(ms)+tok;
   },1000);} else {clearInterval(tickTimer);turnInfo.textContent='';}
 }
@@ -746,13 +747,14 @@ es.onmessage=ev=>{
     case 'tool_progress': if(e.tool)renderToolProgress(e.tool); break;
     case 'usage':
       if(e.usage&&e.parentId){recordSubagentUsage(e.parentId,e.usage.totalTokens||0);break;}
-      if(e.usage){turnTokens=e.usage.completionTokens||0;
+      if(e.usage){turnTokens=e.usage.completionTokens||0; const elapsedS=Math.floor((Date.now()-turnStartAt)/1000);
         const strip=el('div','metric-strip');
         [{l:'Total',v:fmtTok(e.usage.totalTokens),c:''},{l:'In',v:fmtTok(e.usage.promptTokens),c:'acc'},{l:'Out',v:fmtTok(e.usage.completionTokens),c:'ok'}].forEach(it=>{
           const sp=el('span','item');sp.innerHTML=it.l+' <span class="v '+it.c+'">'+it.v+'</span>';strip.appendChild(sp);
         });
         if(e.usage.cacheHitTokens){const sp=el('span','item');sp.innerHTML='Cache <span class="v acc">'+Math.round(e.usage.cacheHitTokens/Math.max(1,e.usage.cacheHitTokens+e.usage.cacheMissTokens)*100)+'%</span>';strip.appendChild(sp);}
         if(e.usage.costUsd){const cs=e.usage.costSymbol||'$';const sp=el('span','item');sp.innerHTML='Cost <span class="v">'+cs+e.usage.costUsd.toFixed(4)+'</span>';strip.appendChild(sp);}
+        if(turnTokens>0&&elapsedS>0){const tps=Math.round(turnTokens/elapsedS);if(tps>0){const sp=el('span','item');sp.innerHTML='TPS <span class="v">'+fmtTok(tps)+'/s</span>';strip.appendChild(sp);}}
         log.appendChild(strip);scrollDown();
       } break;
     case 'notice': log.appendChild(el('div','notice'+(e.level==='warn'?' notice--warn':''),(e.level==='warn'?'! ':'')+(e.text||'')));scrollDown();break;

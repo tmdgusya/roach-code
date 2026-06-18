@@ -309,6 +309,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	started := map[int]bool{}
 	var order []int
 	var lastFinishReason string
+	var sawDone bool
 	var think thinkSplitter
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -321,6 +322,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		}
 		data := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data:")))
 		if bytes.Equal(data, []byte("[DONE]")) {
+			sawDone = true
 			break
 		}
 
@@ -384,6 +386,13 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 
 	if err := scanner.Err(); err != nil {
 		out <- provider.Chunk{Type: provider.ChunkError, Err: fmt.Errorf("%s: read stream: %w", c.name, err)}
+		return
+	}
+	// A proxy that idle-closes with a clean FIN ends the scan with no error. Without
+	// this check the turn would be committed as complete — including half-streamed
+	// tool-call arguments, which then 400 on every replay (issue #3953 upstream).
+	if !sawDone && lastFinishReason == "" {
+		out <- provider.Chunk{Type: provider.ChunkError, Err: fmt.Errorf("%s: stream ended before completion: %w", c.name, io.ErrUnexpectedEOF)}
 		return
 	}
 

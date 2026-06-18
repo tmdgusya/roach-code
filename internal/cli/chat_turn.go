@@ -241,7 +241,11 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		if e.Usage != nil {
 			m.turnTokens += e.Usage.CompletionTokens
 		}
-		if line := usageLine(e.Usage, e.Pricing); line != "" {
+		tps := 0
+		if m.elapsed > 0 && m.turnTokens > 0 {
+			tps = m.turnTokens / m.elapsed
+		}
+		if line := usageLine(e.Usage, e.Pricing, tps); line != "" {
 			m.finalizeStreamed()
 			m.commitLine(line)
 		}
