@@ -21,7 +21,7 @@ import (
 // One lone accent tick leads the line; no background, no animation (it repeats
 // forever, so it must read quiet). The grand total and the reasoning sub-count
 // were dropped — both are derivable/secondary and competed with the headline.
-func usageLine(u *provider.Usage, p *provider.Pricing) string {
+func usageLine(u *provider.Usage, p *provider.Pricing, tps int) string {
 	if u == nil || u.TotalTokens == 0 {
 		return ""
 	}
@@ -51,6 +51,9 @@ func usageLine(u *provider.Usage, p *provider.Pricing) string {
 	b.WriteString(fa(fmt.Sprintf("  · out %d", u.CompletionTokens)))
 	if p != nil {
 		b.WriteString(fa(fmt.Sprintf("  · %s%.4f", p.Symbol(), p.Cost(u))))
+	}
+	if tps > 0 {
+		b.WriteString(fa(fmt.Sprintf("  @ %s/s", shortTPS(tps))))
 	}
 	return b.String()
 }

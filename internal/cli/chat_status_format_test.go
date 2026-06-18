@@ -29,6 +29,31 @@ func TestShortTokens(t *testing.T) {
 	}
 }
 
+// TestShortTPS pins the TPS formatter: raw counts below 1K stay as-is,
+// at/above 1K get one-decimal "K" suffix. Unlike shortTokens, TPS keeps
+// the sub-thousand fraction visible for more precise readouts (3.5K vs 3K).
+func TestShortTPS(t *testing.T) {
+	cases := []struct {
+		name string
+		in   int
+		want string
+	}{
+		{"zero", 0, "0"},
+		{"sub-thousand", 999, "999"},
+		{"exact-thousand", 1000, "1.0K"},
+		{"fractional-thousand", 3500, "3.5K"},
+		{"rounds-up", 12499, "12.5K"},
+		{"just-below-million", 999999, "1000.0K"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shortTPS(tc.in); got != tc.want {
+				t.Fatalf("shortTPS(%d) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestFormatCost pins the magnitude-scaled spend formatter: totals under 1 keep
 // four decimals (so fractions of a cent stay visible) and totals at/above 1
 // round to two decimals. The 0.99999 case verifies %.4f rounding lands on

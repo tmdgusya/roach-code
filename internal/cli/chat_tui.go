@@ -1167,7 +1167,13 @@ func (m chatTUI) View() tea.View {
 		}
 		working = "  " + star + " " + shimmer(verb, m.shimmerPhase) + tail + " " + dim(meta)
 		if m.turnTokens > 0 {
-			working += dim(" · ↓" + shortTokens(m.turnTokens))
+			tps := ""
+			if m.elapsed > 0 {
+				if t := m.turnTokens / m.elapsed; t > 0 {
+					tps = " @" + shortTPS(t) + "/s"
+				}
+			}
+			working += dim(" · ↓" + shortTokens(m.turnTokens) + tps)
 		}
 	}
 	// Second status row: the live data (model, effort, context gauge, cache rates,

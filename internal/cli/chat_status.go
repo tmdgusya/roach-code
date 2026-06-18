@@ -228,3 +228,14 @@ func shortTokens(n int) string {
 		return fmt.Sprintf("%d", n)
 	}
 }
+
+// shortTPS prints tokens-per-second compactly: 3500 → "3.5K", 12000 → "12.0K".
+// Unlike shortTokens, it preserves one decimal for the sub-thousand fraction.
+func shortTPS(n int) string {
+	switch {
+	case n >= 1_000:
+		return fmt.Sprintf("%.1fK", float64(n)/1_000)
+	default:
+		return fmt.Sprintf("%d", n)
+	}
+}
