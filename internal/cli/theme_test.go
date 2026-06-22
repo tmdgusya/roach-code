@@ -18,19 +18,33 @@ func TestConfigureCLIThemeSwitchesModeAndDefaultStyle(t *testing.T) {
 	colorEnabled = true
 
 	configureCLITheme("light")
-	if activeCLITheme.name != "light" || activeCLITheme.style != "sandstone" {
-		t.Fatalf("light theme = %s/%s, want light/sandstone", activeCLITheme.name, activeCLITheme.style)
+	if activeCLITheme.name != "light" || activeCLITheme.style != "amp" {
+		t.Fatalf("light theme = %s/%s, want light/amp", activeCLITheme.name, activeCLITheme.style)
 	}
-	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;173m") {
-		t.Fatalf("light default accent = %q, want sandstone xterm 173", got)
+	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;74m") {
+		t.Fatalf("light default accent = %q, want amp xterm 74", got)
 	}
 
 	configureCLITheme("dark")
-	if activeCLITheme.name != "dark" || activeCLITheme.style != "graphite" {
-		t.Fatalf("dark theme = %s/%s, want dark/graphite", activeCLITheme.name, activeCLITheme.style)
+	if activeCLITheme.name != "dark" || activeCLITheme.style != "amp" {
+		t.Fatalf("dark theme = %s/%s, want dark/amp", activeCLITheme.name, activeCLITheme.style)
 	}
 	if got := accent("x"); !strings.HasPrefix(got, ansiAccent) {
 		t.Fatalf("dark accent = %q, want %q", got, ansiAccent)
+	}
+}
+
+func TestDetectColorHonorsForceColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("TERM", "dumb")
+	t.Setenv("FORCE_COLOR", "1")
+	if !detectColor() {
+		t.Fatal("FORCE_COLOR should enable colour even when TERM=dumb")
+	}
+
+	t.Setenv("NO_COLOR", "1")
+	if detectColor() {
+		t.Fatal("NO_COLOR must override FORCE_COLOR")
 	}
 }
 
@@ -42,45 +56,45 @@ func TestConfigureCLIThemeStyleOverride(t *testing.T) {
 	defer restoreThemeForTest(colorEnabled, activeCLITheme)
 	colorEnabled = true
 
-	configureCLIThemeWithStyle("dark", "aurora")
-	if activeCLITheme.name != "dark" || activeCLITheme.style != "aurora" {
-		t.Fatalf("theme = %s/%s, want dark/aurora", activeCLITheme.name, activeCLITheme.style)
+	configureCLIThemeWithStyle("dark", "amp")
+	if activeCLITheme.name != "dark" || activeCLITheme.style != "amp" {
+		t.Fatalf("theme = %s/%s, want dark/amp", activeCLITheme.name, activeCLITheme.style)
 	}
-	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;79m") {
-		t.Fatalf("aurora accent = %q, want xterm 79", got)
+	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;65m") {
+		t.Fatalf("amp accent = %q, want xterm 65", got)
 	}
 
-	configureCLITheme("glacier")
-	if activeCLITheme.name != "light" || activeCLITheme.style != "glacier" {
-		t.Fatalf("theme style command resolved %s/%s, want light/glacier", activeCLITheme.name, activeCLITheme.style)
+	configureCLITheme("amp")
+	if activeCLITheme.name != "dark" || activeCLITheme.style != "amp" {
+		t.Fatalf("theme style command resolved %s/%s, want dark/amp", activeCLITheme.name, activeCLITheme.style)
 	}
 }
 
 func TestConfigureCLIThemeHonorsEnvOverride(t *testing.T) {
 	t.Setenv("COLORTERM", "")
 	t.Setenv("TERM_PROGRAM", "")
-	t.Setenv("ROACH_THEME", "ember")
+	t.Setenv("ROACH_THEME", "amp")
 	t.Setenv("ROACH_THEME_STYLE", "")
 	defer restoreThemeForTest(colorEnabled, activeCLITheme)
 	colorEnabled = true
 
 	configureCLIThemeWithStyle("light", "glacier")
-	if activeCLITheme.name != "dark" || activeCLITheme.style != "ember" {
-		t.Fatalf("ROACH_THEME override resolved %s/%s, want dark/ember", activeCLITheme.name, activeCLITheme.style)
+	if activeCLITheme.name != "dark" || activeCLITheme.style != "amp" {
+		t.Fatalf("ROACH_THEME override resolved %s/%s, want dark/amp", activeCLITheme.name, activeCLITheme.style)
 	}
 }
 
 func TestThemeArgCompletion(t *testing.T) {
 	defer restoreThemeForTest(colorEnabled, activeCLITheme)
 	colorEnabled = true
-	configureCLIThemeWithStyle("dark", "graphite")
+	configureCLIThemeWithStyle("dark", "amp")
 
 	m := newTestChatTUI()
 	items, _, ok := m.slashArgItems("/theme ")
 	if !ok || len(items) == 0 {
 		t.Fatalf("/theme arg completion should offer themes, ok=%v n=%d", ok, len(items))
 	}
-	if !hasLabel(items, "auto") || !hasLabel(items, "graphite") || !hasLabel(items, "aurora") {
+	if !hasLabel(items, "auto") || !hasLabel(items, "amp") || !hasLabel(items, "light") {
 		t.Fatalf("/theme completion missing expected themes: %v", labels(items))
 	}
 }
@@ -92,18 +106,68 @@ func TestRunThemeSubcommandSwitchesAccentAndTextarea(t *testing.T) {
 	t.Setenv("ROACH_THEME_STYLE", "")
 	defer restoreThemeForTest(colorEnabled, activeCLITheme)
 	colorEnabled = true
-	configureCLIThemeWithStyle("dark", "graphite")
+	configureCLIThemeWithStyle("dark", "amp")
 
 	m := newTestChatTUI()
-	m.runThemeSubcommand("/theme aurora")
-	if activeCLITheme.name != "dark" || activeCLITheme.style != "aurora" {
-		t.Fatalf("current theme = %s/%s, want dark/aurora", activeCLITheme.name, activeCLITheme.style)
+	m.runThemeSubcommand("/theme amp")
+	if activeCLITheme.name != "dark" || activeCLITheme.style != "amp" {
+		t.Fatalf("current theme = %s/%s, want dark/amp", activeCLITheme.name, activeCLITheme.style)
 	}
-	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;79m") {
-		t.Fatalf("accent = %q, want aurora xterm color", got)
+	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;65m") {
+		t.Fatalf("accent = %q, want amp xterm color", got)
 	}
 	if m.input.Styles().Cursor.Color == nil {
 		t.Fatal("textarea cursor color was not refreshed")
+	}
+}
+
+func TestAmpDarkThemeColorTokens(t *testing.T) {
+	t.Setenv("COLORTERM", "")
+	t.Setenv("TERM_PROGRAM", "")
+	t.Setenv("ROACH_THEME", "")
+	t.Setenv("ROACH_THEME_STYLE", "")
+	defer restoreThemeForTest(colorEnabled, activeCLITheme)
+	colorEnabled = true
+
+	configureCLIThemeWithStyle("dark", "amp")
+	want := map[string]cliColor{
+		"ink":       {hex: "#000000", xterm: 16},
+		"accent":    {hex: "#48a36d", xterm: 65},
+		"selection": {hex: "#48a36d", xterm: 65},
+		"muted":     {hex: "#8a8a8a", xterm: 245},
+		"faint":     {hex: "#5f5f5f", xterm: 240},
+		"border":    {hex: "#1a1a1a", xterm: 234},
+		"surface":   {hex: "#080808", xterm: 232},
+		"toolRead":  {hex: "#8a8a8a", xterm: 245},
+		"toolProc":  {hex: "#6f6f6f", xterm: 242},
+	}
+	got := map[string]cliColor{
+		"ink":       activeCLITheme.ink,
+		"accent":    activeCLITheme.accent,
+		"selection": activeCLITheme.selection,
+		"muted":     activeCLITheme.muted,
+		"faint":     activeCLITheme.faint,
+		"border":    activeCLITheme.border,
+		"surface":   activeCLITheme.surface,
+		"toolRead":  activeCLITheme.toolRead,
+		"toolProc":  activeCLITheme.toolProc,
+	}
+	for name, wantColor := range want {
+		if got[name] != wantColor {
+			t.Fatalf("%s = %+v, want %+v", name, got[name], wantColor)
+		}
+	}
+	if activeCLITheme.accent.hex == "#6b8cce" {
+		t.Fatal("dark amp accent must not be the previous blue #6b8cce")
+	}
+	if !reflect.DeepEqual(inputBoxStyle.GetBorderTopForeground(), themeLipColor(activeCLITheme.border)) {
+		t.Fatalf("input border should use border token, got %v want %v", inputBoxStyle.GetBorderTopForeground(), themeLipColor(activeCLITheme.border))
+	}
+	if reflect.DeepEqual(inputBoxStyle.GetBorderTopForeground(), themeLipColor(activeCLITheme.accent)) {
+		t.Fatal("input border must not use accent token")
+	}
+	if !reflect.DeepEqual(scrollThumbStyle.GetForeground(), themeLipColor(activeCLITheme.faint)) {
+		t.Fatalf("scroll thumb should use faint token, got %v want %v", scrollThumbStyle.GetForeground(), themeLipColor(activeCLITheme.faint))
 	}
 }
 

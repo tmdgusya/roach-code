@@ -150,15 +150,11 @@ func (m chatTUI) renderApprovalBanner() string {
 	return m.frameApproval(lines, destructive, w)
 }
 
-// frameApproval wraps the gate lines in the shared thin chassis, colouring only
-// the border by risk (amber for destructive, copper for benign) — respecting
-// NO_COLOR via withThemeBorderFG.
+// frameApproval renders the gate in the shared terminal-native overlay style.
+// Risk is carried by the action marker and default selection rather than a
+// bordered floating card.
 func (m chatTUI) frameApproval(lines []string, destructive bool, w int) string {
-	c := activeCLITheme.accent
-	if destructive {
-		c = activeCLITheme.warn
-	}
-	return withThemeBorderFG(approvalBannerStyle, c).Width(w).Render(strings.Join(lines, "\n"))
+	return approvalBannerStyle.Width(w).Render(strings.Join(lines, "\n"))
 }
 
 // approvalDestructive reports whether a gated call can change state, so the gate

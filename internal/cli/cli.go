@@ -434,7 +434,7 @@ func chatREPL(args []string, version string) int {
 	// normal buffer (via tea.Println) so native scrollback, the wheel, and copy
 	// all work — the bubbletea-managed region is just the bottom input/status.
 	p := tea.NewProgram(m)
-	final, runErr := p.Run()
+	final, runErr := runTeaProgramWithTerminalFailsafe(p)
 	// Close the active controller plus any retired ones from /model switches.
 	// Retired controllers were stashed rather than closed at switch time
 	// because Controller.Close() runs SessionEnd hooks and kills plugin
@@ -451,6 +451,12 @@ func chatREPL(args []string, version string) int {
 		}
 	} else {
 		ctrl.Close()
+	}
+	if errors.Is(runErr, errTerminalDetached) {
+		return 0
+	}
+	if errors.Is(runErr, errTerminalTerminated) {
+		return 1
 	}
 	if runErr != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, runErr)

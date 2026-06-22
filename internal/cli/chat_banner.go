@@ -67,10 +67,10 @@ func renderTUIBannerAt(label, missing, updateNotice string, width, phase int) st
 	}
 	var b strings.Builder
 	const indent = "  "
-	// A warm ambient ramp — copper glow → amber → seafoam — reused for the hero art
-	// and the compact wordmark so the brand reads the same at every width. (Warm,
-	// lamplit; not the old neon copper→cyan→magenta.)
-	stops := []cliColor{activeCLITheme.accent, activeCLITheme.warn, activeCLITheme.toolRead}
+	// A dim two-stop ramp for the hero art: sparse green into muted grey. The
+	// visual weight is intentionally low so the welcome screen reads closer to
+	// Amp's black-canvas, dot-matrix feel instead of a bright blue brand poster.
+	stops := []cliColor{mixColor(activeCLITheme.surface, activeCLITheme.accent, 0.42), activeCLITheme.muted}
 	artW := roachArtWidth()
 
 	b.WriteString("\n") // a little breathing room above the wordmark
@@ -113,19 +113,22 @@ func wrapForViewport(text string, width int, fg cliColor) string {
 	return themeStyle(fg).Width(width).Render(text)
 }
 
-// renderUserBubble styles the just-submitted line with a filled dim background.
+// renderUserBubble styles the just-submitted line as a labelled text block —
+// "You:" prefix + plain body — aligned to amp's minimal label-style messages.
+// The previous warm-filled background bubble was dropped with the amp redesign.
 func renderUserBubble(line string, width int) string {
 	line = displayLineForImageRefs(line)
-	prefix := "› "
+	label := "You:"
 	if !colorEnabled {
-		return "│ " + prefix + line
+		return label + " " + line
 	}
+	// Body width accounts for the "You: " prefix (4 cols) so it wraps cleanly.
 	w := width - 4
 	if w < 10 {
 		w = 10
 	}
-	bubble := themeBGStyle(activeCLITheme.userBubbleBG).Width(w).Padding(0, 1)
-	return bubble.Render(prefix + line)
+	body := themeStyle(activeCLITheme.text).Width(w).Render(line)
+	return bold(themeFg(activeCLITheme.accent, label)) + " " + body
 }
 
 var cliImageRefRe = regexp.MustCompile(`(?:^|\s)@\.roach-code/attachments/clipboard-\d{8}-\d{6}\.\d+(?:-(?:\d{6}|[a-f0-9]{8}))?\.(?:png|jpg|jpeg|gif|webp)`)

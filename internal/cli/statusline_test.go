@@ -151,9 +151,9 @@ func TestStatuslineExplicitEffortUsesAccentColor(t *testing.T) {
 	if !strings.Contains(plain, "effort max") {
 		t.Fatalf("status data line should show explicit effort:\n%s", plain)
 	}
-	// Explicit effort uses the active theme's accent color (copper-coral #d97757 for graphite).
-	if !strings.Contains(content, "\x1b[38;2;217;119;87m") && !strings.Contains(content, "\x1b[38;5;173m") {
-		t.Fatalf("explicit effort should use graphite accent color, got:\n%q", content)
+	// Explicit effort uses the active theme's muted green accent color (#48a36d for amp).
+	if !strings.Contains(content, "\x1b[38;2;72;163;109m") && !strings.Contains(content, "\x1b[38;5;65m") {
+		t.Fatalf("explicit effort should use amp accent color, got:\n%q", content)
 	}
 }
 

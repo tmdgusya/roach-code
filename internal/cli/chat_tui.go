@@ -743,6 +743,8 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, finalize(m, nil)
 		case "ctrl+d":
 			return m, tea.Quit
+		case "ctrl+z":
+			return m, tea.Suspend
 		case "ctrl+v", "ctrl+shift+v", "super+v", "meta+v":
 			if m.state == tuiRunning {
 				return m, nil
@@ -1239,26 +1241,28 @@ func (m chatTUI) View() tea.View {
 	statusBlock := clampStatusLine(status, boxW) + "\n" + clampStatusLine(dataLine, boxW)
 	parts = append(parts, box, statusBlockStyle.Width(boxW).MaxWidth(boxW).Render(statusBlock))
 
-	// Full-screen frame: the transcript viewport on top (it pads to exactly its
-	// height), the pinned bottom region beneath. Alt-screen owns the grid, so
-	// resize repaints cleanly — no scrollback reflow, no ghost borders.
+	// Full-screen frame: the thread header on top (amp-style), the transcript
+	// viewport beneath it, then the pinned bottom region. Alt-screen owns the
+	// grid, so resize repaints cleanly — no scrollback reflow, no ghost borders.
 	//
-	// Terminal-native background: we deliberately do NOT paint a page background
-	// (no v.BackgroundColor) and do NOT fill cell backgrounds. Every cell keeps the
-	// user's own terminal background; only the TEXT is coloured. Painting a warm
-	// "ink canvas" kept fighting the terminal — cells after an inline SGR reset fell
-	// to the terminal default and read as black boxes, and re-asserting the fill
-	// then showed as ragged grey blocks behind menus. The flashy identity lives in
-	// the foreground (shimmer, gradients, glyphs), so nothing is lost by dropping it.
-	// The fresh welcome screen renders the banner LIVE here (not via the viewport) so
-	// it animates smoothly on every terminal — including ones that don't repaint an
-	// in-place viewport change. Once a turn starts it's committed static and the
-	// viewport takes over.
+	// Amp-like terminal-native surface: leave the terminal background alone and
+	// carry the look through foreground colour, spacing, and low-contrast rules.
+	// Forcing a black canvas creates visible patches when the user's terminal
+	// theme is not pure black.
+	// The fresh welcome screen renders the banner LIVE here (not via the viewport)
+	// so it animates smoothly on every terminal — including ones that don't
+	// repaint an in-place viewport change. Once a turn starts it's committed
+	// static and the viewport takes over.
+	header := m.renderThreadHeader()
 	top := m.renderTranscript()
 	if m.bannerLive {
 		top = m.renderWelcomeBanner()
 	}
-	v := tea.NewView(top + "\n" + strings.Join(parts, "\n"))
+	frame := top + "\n" + strings.Join(parts, "\n")
+	if header != "" {
+		frame = header + "\n" + frame
+	}
+	v := tea.NewView(frame)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion // wheel scrolls the transcript
 	// Anchor the real terminal cursor at the textarea's insertion point so IME
@@ -1267,7 +1271,7 @@ func (m chatTUI) View() tea.View {
 	// border row (+1 column for PaddingLeft).
 	if cur := m.input.Cursor(); cur != nil {
 		cur.X += 1
-		cur.Y += m.viewport.Height() + rowsAboveBox + 1
+		cur.Y += m.headerRows() + m.viewport.Height() + rowsAboveBox + 1
 		v.Cursor = cur
 	}
 	return v

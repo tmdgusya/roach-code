@@ -177,14 +177,28 @@ func argList(v any) string {
 	return strings.Join(parts, ", ")
 }
 
-// toolCard renders the dispatch line: "  ● Verb(arg)" — the dot sits at column 2
-// (structure) and the verb starts at the column-4 axis, with the tool's "  │ "
-// output rail hanging straight off the same dot. Fewer glyphs than the old "╭─ ●"
-// corner, more order.
+// toolSummaryGlyph is the compact glyph that fronts the one-line tool summary —
+// a single ◐ (single-accent discipline) replacing the old coloured ● dot card.
+// It replaces the multi-colour dot/rail "card" form in the amp redesign.
+const toolSummaryGlyph = "◐"
+
+// toolCard renders the dispatch line as a compact one-line summary —
+// "  ◐ Verb(arg)" — aligned to amp's minimal tool-summary style. The old
+// coloured ● dot + connector rail card was collapsed to a single glyph; tool
+// output still follows on its own indented block via connectorBlock, but the
+// dispatch header itself is one line. Fewer glyphs, one accent colour.
 func toolCard(name, args string, width int) string {
-	prefix := "  " + toolDot(name) + " "
-	reserved := len([]rune("  ● ")) // dot at col 2, verb at the col-4 axis
+	prefix := "  " + themeFg(activeCLITheme.accent, toolSummaryGlyph) + " "
+	reserved := len([]rune("  ◐ ")) // glyph at col 2, verb at the col-4 axis
 	return clampStatusLine(prefix+toolHeadReserved(name, toolArg(name, args), width, reserved), width)
+}
+
+// renderToolSummary is the amp-style entry point — same one-line form as
+// toolCard, exposed under the name the acceptance criteria (AC-15/18) reference.
+// Returns the compact single-line summary (no expand toggle state here; the
+// caller renders expanded output separately via connectorBlock).
+func renderToolSummary(name, args string, width int) string {
+	return toolCard(name, args, width)
 }
 
 // toolHead builds "Verb(arg)" with the verb bold and the arg clamped to fit the

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -204,6 +206,69 @@ func (m chatTUI) modelTag() string {
 		return ""
 	}
 	return bold(themeFg(activeCLITheme.muted, m.label)) // anchors the left edge of the data row
+}
+
+// dirTag returns a compact rendering of the current working directory's base
+// name for the thread header — the leaf folder the session runs in. Falls back
+// to the full path when the base name is empty (e.g. root).
+func dirTag(width int) string {
+	cwd, err := os.Getwd()
+	if err != nil || cwd == "" {
+		return ""
+	}
+	base := filepath.Base(cwd)
+	if base == "" || base == "." || base == string(filepath.Separator) {
+		base = cwd
+	}
+	// Clamp to a sane width so a deep path never blows out the header row.
+	avail := width / 3
+	if avail < 12 {
+		avail = 12
+	}
+	return dim(clampPlain(base, avail))
+}
+
+// renderThreadHeader renders the single top row — the amp-style thread header —
+// carrying the model label, the cwd, and the context-window gauge. It is one
+// line, full width, so the transcript viewport below it fills exactly the rest
+// of the screen (its row is subtracted in transcriptHeight). The header owns
+// thread-identity info (who/where/how-full); the bottom status rows keep the
+// live runtime data (cost/jobs/balance).
+func (m chatTUI) renderThreadHeader() string {
+	w := m.width
+	if w < 10 {
+		w = 10
+	}
+	sep := themeFg(activeCLITheme.faint, " · ")
+	var parts []string
+	if mt := m.modelTag(); mt != "" {
+		parts = append(parts, mt)
+	}
+	if dt := dirTag(w); dt != "" {
+		parts = append(parts, dt)
+	}
+	if ctx := m.contextTag(); ctx != "" {
+		parts = append(parts, ctx)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	line := "  " + strings.Join(parts, sep)
+	return clampStatusLine(line, w)
+}
+
+// headerRows is the terminal-row height the thread header occupies at the top
+// of the screen (0 when it has nothing to show, 1 otherwise). transcriptHeight
+// subtracts this so the viewport never overflows under the header.
+func (m chatTUI) headerRows() int {
+	if mt := m.modelTag(); mt == "" {
+		if dt := dirTag(m.width); dt == "" {
+			if ctx := m.contextTag(); ctx == "" {
+				return 0
+			}
+		}
+	}
+	return 1
 }
 
 func (m chatTUI) effortTag() string {

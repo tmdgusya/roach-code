@@ -160,8 +160,9 @@ func TestTranscriptMirrorsCommits(t *testing.T) {
 }
 
 // TestTranscriptViewportSizing proves the viewport tracks the terminal size and
-// gets the rows left over after the pinned bottom region (input box + 2 status
-// rows = 5 with an empty 1-line composer), and is fed the committed transcript.
+// gets the rows left over after the thread header + pinned bottom region
+// (input box + 2 status rows = 5 with an empty 1-line composer; the amp-style
+// thread header takes 1 more row at the top), and is fed the committed transcript.
 func TestTranscriptViewportSizing(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80, "")
@@ -172,11 +173,13 @@ func TestTranscriptViewportSizing(t *testing.T) {
 	if got := m.bottomRows(); got != 5 {
 		t.Fatalf("bottomRows with an empty composer = %d, want 5 (input 1 + border 2 + status 2)", got)
 	}
+	headerH := m.headerRows()
 	if m.viewport.Width() != 79 {
 		t.Errorf("viewport content width = %d, want 79 (terminal 80 - 1 scrollbar column)", m.viewport.Width())
 	}
-	if want := m.transcriptHeight(); m.viewport.Height() != want || want != 19 {
-		t.Errorf("viewport height = %d, transcriptHeight = %d, want 19 (24-5)", m.viewport.Height(), want)
+	wantH := 24 - headerH - 5
+	if want := m.transcriptHeight(); m.viewport.Height() != want || want != wantH {
+		t.Errorf("viewport height = %d, transcriptHeight = %d, want %d (24 - header %d - bottom 5)", m.viewport.Height(), want, wantH, headerH)
 	}
 	if m.viewport.TotalLineCount() == 0 {
 		t.Errorf("viewport should hold the committed banner after the first resize")
@@ -203,8 +206,8 @@ func TestIngestEventRoutesByKind(t *testing.T) {
 		ev   event.Event
 		want string
 	}{
-		{"dispatch", event.Event{Kind: event.ToolDispatch, Tool: event.Tool{Name: "read_file", Args: `{"path":"x"}`}}, "● Read(x)"},
-		{"blocked", event.Event{Kind: event.ToolResult, Tool: event.Tool{Name: "bash", Err: "blocked by permission policy"}}, "● Bash ⊘ blocked by permission policy"},
+		{"dispatch", event.Event{Kind: event.ToolDispatch, Tool: event.Tool{Name: "read_file", Args: `{"path":"x"}`}}, "◐ Read(x)"},
+		{"blocked", event.Event{Kind: event.ToolResult, Tool: event.Tool{Name: "bash", Err: "blocked by permission policy"}}, "◐ Bash ⊘ blocked by permission policy"},
 		{"usage", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200, CacheHitTokens: 900, CacheMissTokens: 100}}, "  · 1200 tok"},
 		{"notice-info", event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "compacted 8 messages → summary"}, "  · compacted 8 messages → summary"},
 		{"notice-warn", event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "response truncated: hit max output tokens"}, "  ! response truncated: hit max output tokens"},
@@ -693,6 +696,17 @@ func TestSlashQuitExit(t *testing.T) {
 		if _, ok := msg.(tea.QuitMsg); !ok {
 			t.Errorf("%s cmd should produce QuitMsg, got %T", cmd, msg)
 		}
+	}
+}
+
+func TestCtrlZSuspendsThroughBubbleTea(t *testing.T) {
+	m := newTestChatTUI()
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'z', Mod: 4}) // 4 = ModCtrl
+	if cmd == nil {
+		t.Fatal("Ctrl+Z should return a suspend cmd")
+	}
+	if _, ok := cmd().(tea.SuspendMsg); !ok {
+		t.Fatalf("Ctrl+Z cmd should produce SuspendMsg")
 	}
 }
 
