@@ -207,14 +207,14 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 
 	case event.ToolResult:
 		// A successful result is silent (it only feeds the model); a blocked/failed
-		// call surfaces a red "● Verb ⊘ <reason>" card. A live-output block (bash)
+		// call surfaces a red "◐ Verb ⊘ <reason>" line. A live-output block (bash)
 		// collapses to a one-line "╰─ N lines" summary first.
 		m.collapseToolOutput(e.Tool.ID)
 		if e.Tool.ParentID != "" {
 			if e.Tool.Err != "" {
 				m.clearReadRollup()
 				m.finalizeStreamed()
-				m.commitLine(surfaceWrap("  │ "+red("●")+" "+bold(toolDisplayName(e.Tool.Name))+" "+red("⊘ "+e.Tool.Err), m.width))
+				m.commitLine(surfaceWrap("  │ "+red("◐")+" "+bold(toolDisplayName(e.Tool.Name))+" "+red("⊘ "+e.Tool.Err), m.width))
 			}
 			break
 		}
@@ -227,7 +227,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		if e.Tool.Err != "" {
 			m.clearReadRollup()
 			m.finalizeStreamed()
-			m.commitLine(surfaceWrap("  "+red("●")+" "+bold(toolDisplayName(e.Tool.Name))+" "+red("⊘ "+e.Tool.Err), m.width))
+			m.commitLine(surfaceWrap("  "+red("◐")+" "+bold(toolDisplayName(e.Tool.Name))+" "+red("⊘ "+e.Tool.Err), m.width))
 		}
 
 	case event.Usage:

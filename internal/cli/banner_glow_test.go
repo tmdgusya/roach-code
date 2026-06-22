@@ -27,7 +27,7 @@ func TestBannerGlowAnimatesIn256(t *testing.T) {
 	if supportsTrueColor() {
 		t.Skip("env reports truecolor — can't exercise the 256 path here")
 	}
-	stops := []cliColor{activeCLITheme.accent, activeCLITheme.warn, activeCLITheme.toolRead}
+	stops := []cliColor{activeCLITheme.accent, activeCLITheme.muted}
 	a := strings.Join(roachHeroShimmerRows(stops, 0), "\n")
 	b := strings.Join(roachHeroShimmerRows(stops, 18), "\n")
 	if a == b {

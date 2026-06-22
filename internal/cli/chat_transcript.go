@@ -122,9 +122,9 @@ func (m chatTUI) bottomRows() int {
 }
 
 // transcriptHeight is the row budget left for the transcript viewport once the
-// pinned bottom region is accounted for (at least one row).
+// thread header and the pinned bottom region are accounted for (at least one row).
 func (m chatTUI) transcriptHeight() int {
-	if h := m.height - m.bottomRows(); h > 1 {
+	if h := m.height - m.headerRows() - m.bottomRows(); h > 1 {
 		return h
 	}
 	return 1

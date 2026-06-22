@@ -15,6 +15,9 @@ func detectColor() bool {
 	if os.Getenv("NO_COLOR") != "" {
 		return false
 	}
+	if os.Getenv("FORCE_COLOR") != "" || os.Getenv("CLICOLOR_FORCE") != "" {
+		return true
+	}
 	if os.Getenv("TERM") == "dumb" {
 		return false
 	}
@@ -32,10 +35,10 @@ const (
 	ansiCyan    = "\033[38;5;44m"
 	ansiMagenta = "\033[38;5;176m"
 	ansiReverse = "\033[7m"
-	// ansiAccent is the dark theme fallback for Roach Code's warm copper brand
-	// colour. accent() uses the active CLI theme, but tests and legacy callers can
+	// ansiAccent is the dark theme fallback for Roach Code's muted green Amp-like
+	// accent. accent() uses the active CLI theme, but tests and legacy callers can
 	// still refer to this concrete escape sequence.
-	ansiAccent = "\033[38;5;173m"
+	ansiAccent = "\033[38;5;65m"
 )
 
 func sgr(code, s string) string {
@@ -55,9 +58,13 @@ func cyan(s string) string    { return themeFg(activeCLITheme.toolRead, s) }
 func magenta(s string) string { return themeFg(activeCLITheme.toolProc, s) }
 func reverse(s string) string { return sgr(ansiReverse, s) }
 
+// accentMark wraps s in the single brand accent colour — a minimal chip that
+// replaced the old multi-colour glitchMark. Under NO_COLOR / a non-tty it returns
+// s unchanged. The name is kept (call sites already use it) but the look is now a
+// plain accent-coloured label, aligned to amp's single-accent discipline.
 func glitchMark(s string) string {
 	if !colorEnabled {
 		return s
 	}
-	return cyan("⟦") + accent(s) + magenta("⟧")
+	return accent(s)
 }

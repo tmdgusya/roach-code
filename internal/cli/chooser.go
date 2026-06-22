@@ -319,6 +319,5 @@ func headerOr(q event.AskQuestion, i int) string {
 	return fmt.Sprintf("Q%d", i+1)
 }
 
-// choicePanelStyle frames the question card, matching the input box's top/bottom
-// rule but in the accent colour.
+// choicePanelStyle renders pinned choice/menu overlays without card borders.
 var choicePanelStyle lipgloss.Style

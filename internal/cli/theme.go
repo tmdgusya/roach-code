@@ -30,15 +30,15 @@ type cliPalette struct {
 	danger       cliColor
 	border       cliColor
 	selection    cliColor
-	userBubbleBG cliColor
+	userBubbleBG cliColor // retained for compat; no longer used as a fill post-amp-redesign
 	diffAddBG    cliColor
 	diffDelBG    cliColor
 	toolRead     cliColor
 	toolProc     cliColor
-	surface      cliColor // warm panel fill behind tool/output blocks (ambient depth)
-	surfaceLift  cliColor // the panel's top row — one step toward the light (top-left lamp)
+	surface      cliColor // neutral panel fill behind tool/output blocks (ambient depth)
+	surfaceLift  cliColor // the panel's top row — one step toward the light
 	surfaceSeam  cliColor // 1-cell lit edge at col 3, where the lamp catches the structural spine
-	text         cliColor // base body-text foreground (warm off-white, not terminal default)
+	text         cliColor // base body-text foreground (neutral off-white, not terminal default)
 	ink          cliColor // page background painted across the whole alt-screen (the ambient canvas)
 }
 
@@ -50,67 +50,59 @@ type cliThemeStyle struct {
 }
 
 var (
-	// The default dark shell is "warm coal": a near-black backdrop tinted brown
-	// rather than neutral graphite, low-contrast warm off-white text, a copper-coral
-	// glow accent, and seafoam/kelp as the cool counterpoint — an ambient, lamplit
-	// register (inspired by gajae-code's red-claw) instead of a high-contrast neon
-	// terminal. The glitch style still overrides these for the loud cyber look.
+	// The default dark shell is "amp": a black canvas, low-contrast neutral grey
+	// text, and a sparse muted green accent. The colour is deliberately quieter
+	// than the previous blue pass so the TUI reads closer to Amp's terminal-native
+	// welcome screen: black first, muted text second, accent only where it matters.
 	cliDarkTheme = cliPalette{
 		name:         "dark",
-		style:        "graphite",
-		accent:       cliColor{"#e0875c", 173}, // copper-coral glow
-		muted:        cliColor{"#c6ad9d", 250}, // warm dusty taupe (primary text-ish)
-		faint:        cliColor{"#8c7669", 243}, // muted coffee taupe
-		success:      cliColor{"#7fd6a8", 114}, // seafoam kelp
-		warn:         cliColor{"#e3aa5a", 179}, // warm amber
-		err:          cliColor{"#e58a6f", 209}, // warm coral
-		danger:       cliColor{"#e5565a", 203}, // alarm coral-red
-		border:       cliColor{"#3a2a22", 236}, // warm coal-brown border
-		selection:    cliColor{"#e0875c", 173},
-		userBubbleBG: cliColor{"#2c1d15", 236}, // warm panel — clearly lifted, brighter than the tool surface
-		diffAddBG:    cliColor{"#18291d", 22},  // warm-tinted dark green
-		diffDelBG:    cliColor{"#321a17", 52},  // warm-tinted dark red
-		toolRead:     cliColor{"#6fcabf", 79},  // seafoam (calmer than cyan)
-		toolProc:     cliColor{"#c98fd0", 176}, // soft violet
-		surface:      cliColor{"#1b1410", 234}, // tool-panel fill, dimmer than the user bubble
-		surfaceLift:  cliColor{"#1e1712", 234}, // top row, +~4 luma toward the lamp (never +5 — that bands)
-		surfaceSeam:  cliColor{"#241a13", 235}, // lit edge at col 3
-		text:         cliColor{"#ece0d4", 253}, // warm off-white body text
-		ink:          cliColor{"#15100d", 233}, // warm near-black page canvas (painted across the screen)
+		style:        "amp",
+		accent:       cliColor{"#48a36d", 65},  // muted green accent, used sparingly
+		muted:        cliColor{"#8a8a8a", 245}, // normal labels and secondary body
+		faint:        cliColor{"#5f5f5f", 240}, // meta/help/footer text
+		success:      cliColor{"#5ba870", 65},  // subdued green
+		warn:         cliColor{"#b58a45", 136}, // subdued amber
+		err:          cliColor{"#c85f5f", 131}, // subdued red
+		danger:       cliColor{"#d06464", 167}, // destructive emphasis
+		border:       cliColor{"#1a1a1a", 234}, // quiet input/separator rule
+		selection:    cliColor{"#48a36d", 65},
+		userBubbleBG: cliColor{"#080808", 232}, // retained for compat; not used as fill
+		diffAddBG:    cliColor{"#0b1a10", 22},  // very dark green
+		diffDelBG:    cliColor{"#1e0d0d", 52},  // very dark red
+		toolRead:     cliColor{"#8a8a8a", 245}, // tool labels stay neutral
+		toolProc:     cliColor{"#6f6f6f", 242}, // process/tool secondary
+		surface:      cliColor{"#080808", 232}, // rare elevated rows only
+		surfaceLift:  cliColor{"#101010", 233}, // subtle local lift
+		surfaceSeam:  cliColor{"#181818", 234}, // separators
+		text:         cliColor{"#d7d7d7", 188}, // high-emphasis text
+		ink:          cliColor{"#000000", 16},  // Amp-like black canvas
 	}
 	cliLightTheme = cliPalette{
 		name:         "light",
-		style:        "sandstone",
-		accent:       cliColor{"#2f5fa8", 25},
-		muted:        cliColor{"#555049", 239},
-		faint:        cliColor{"#82796f", 243},
-		success:      cliColor{"#5d9b66", 65},
-		warn:         cliColor{"#b68120", 136},
-		err:          cliColor{"#b94b4d", 131},
-		danger:       cliColor{"#e5484d", 167},
-		border:       cliColor{"#ded4c6", 252},
-		selection:    cliColor{"#6f91d9", 68},
-		userBubbleBG: cliColor{"#f5f0e8", 255},
-		diffAddBG:    cliColor{"#e5f3e7", 254},
-		diffDelBG:    cliColor{"#fae8e8", 255},
-		toolRead:     cliColor{"#6f91d9", 68},
-		toolProc:     cliColor{"#8a6bb8", 97},
-		surface:      cliColor{"#f1ece2", 254}, // warm paper panel fill
-		surfaceLift:  cliColor{"#f6f1e7", 255}, // top row, +~4 luma toward ink (brighter, not darker)
-		surfaceSeam:  cliColor{"#f8f2e6", 255}, // lit edge at col 3
-		text:         cliColor{"#2e2a24", 236}, // warm near-black body text
-		ink:          cliColor{"#faf5ec", 255}, // warm paper page canvas
+		style:        "amp",
+		accent:       cliColor{"#357fa8", 74},  // steel-blue accent (single brand colour)
+		muted:        cliColor{"#52525b", 240}, // neutral grey
+		faint:        cliColor{"#a1a1aa", 145}, // dim neutral grey
+		success:      cliColor{"#16a34a", 34},  // neutral green
+		warn:         cliColor{"#d97706", 172}, // neutral amber
+		err:          cliColor{"#dc2626", 124}, // neutral red
+		danger:       cliColor{"#e5484d", 167}, // alarm red
+		border:       cliColor{"#e4e4e7", 254}, // neutral light grey border
+		selection:    cliColor{"#357fa8", 74},
+		userBubbleBG: cliColor{"#f4f4f5", 255}, // neutral panel (unused for fill post-redesign; kept for compat)
+		diffAddBG:    cliColor{"#ecfdf5", 255}, // neutral-tinted light green
+		diffDelBG:    cliColor{"#fef2f2", 255}, // neutral-tinted light red
+		toolRead:     cliColor{"#357fa8", 74},  // steel-blue
+		toolProc:     cliColor{"#64748b", 66},  // cool slate-grey
+		surface:      cliColor{"#f4f4f5", 255}, // neutral paper panel fill
+		surfaceLift:  cliColor{"#fafafa", 255}, // top row, one step lighter
+		surfaceSeam:  cliColor{"#ffffff", 255}, // lit edge at col 3
+		text:         cliColor{"#27272a", 235}, // neutral near-black body text
+		ink:          cliColor{"#fafafa", 255}, // neutral near-white page canvas
 	}
 	cliThemeStyles = []cliThemeStyle{
-		{name: "graphite", mode: "dark", accent: cliColor{"#d97757", 173}, description: "warm clay accent"},
-		{name: "ember", mode: "dark", accent: cliColor{"#f06d38", 209}, description: "hot orange accent"},
-		{name: "aurora", mode: "dark", accent: cliColor{"#34c3a6", 79}, description: "cool teal accent"},
-		{name: "midnight", mode: "dark", accent: cliColor{"#b18cff", 141}, description: "quiet violet accent"},
-		{name: "glitch", mode: "dark", accent: cliColor{"#ff3df2", 201}, description: "neon magenta terminal"},
-		{name: "sandstone", mode: "light", accent: cliColor{"#c2613f", 173}, description: "default warm light accent"},
-		{name: "porcelain", mode: "light", accent: cliColor{"#7d63c8", 104}, description: "soft violet light accent"},
-		{name: "linen", mode: "light", accent: cliColor{"#bd5d4d", 167}, description: "muted coral light accent"},
-		{name: "glacier", mode: "light", accent: cliColor{"#357fa8", 74}, description: "cool blue light accent"},
+		{name: "amp", mode: "dark", accent: cliColor{"#48a36d", 65}, description: "near-black muted green (amp)"},
+		{name: "amp", mode: "light", accent: cliColor{"#357fa8", 74}, description: "minimal steel-blue (amp)"},
 	}
 	activeCLITheme                  = applyCLIThemeStyle(cliDarkTheme, cliThemeStyles[0])
 	queryTerminalBackgroundForTheme = queryTerminalBackground
@@ -191,20 +183,6 @@ func applyCLIThemeStyle(base cliPalette, style cliThemeStyle) cliPalette {
 	base.style = style.name
 	base.accent = style.accent
 	base.selection = style.accent
-	if style.name == "glitch" {
-		base.muted = cliColor{"#b8fff7", 159}
-		base.faint = cliColor{"#6f7f91", 245}
-		base.border = cliColor{"#203345", 24}
-		base.selection = cliColor{"#00e5ff", 45}
-		base.userBubbleBG = cliColor{"#171527", 234}
-		base.toolRead = cliColor{"#00e5ff", 45}
-		base.toolProc = cliColor{"#ff3df2", 201}
-		base.surface = cliColor{"#12101f", 233}
-		base.surfaceLift = cliColor{"#16131f", 234}
-		base.surfaceSeam = cliColor{"#1a1530", 235}
-		base.text = cliColor{"#d7e9f2", 195} // cool glow text for the neon style
-		base.ink = cliColor{"#0c0a16", 233}  // deep violet-black canvas
-	}
 	return base
 }
 
@@ -219,11 +197,10 @@ func cliThemeStyleByName(name string) (cliThemeStyle, bool) {
 }
 
 func defaultCLIThemeStyle(mode string) cliThemeStyle {
-	if mode == "light" {
-		for _, st := range cliThemeStyles {
-			if st.name == "sandstone" {
-				return st
-			}
+	// Both modes now share the single "amp" tone; pick the matching-mode entry.
+	for _, st := range cliThemeStyles {
+		if st.mode == mode {
+			return st
 		}
 	}
 	return cliThemeStyles[0]
@@ -423,18 +400,13 @@ func init() {
 
 func refreshCLIStyles() {
 	inputBoxStyle = withThemeBorderFG(lipgloss.NewStyle().
-		Border(lipgloss.ThickBorder(), true, false, true, false), activeCLITheme.accent).
+		Border(lipgloss.ThickBorder(), true, false, true, false), activeCLITheme.border).
 		PaddingLeft(1)
-	// The approval gate shares the chooser's thin (Normal) chassis; risk is carried
-	// by the per-render border colour (amber for destructive, copper for benign,
-	// set in frameApproval) and by the highlighted default row — not by a
-	// permanently-loud thick amber frame that trains alarm-fatigue.
-	approvalBannerStyle = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder(), true, false, true, false).
-		PaddingLeft(1)
-	todoPanelStyle = withThemeBorderFG(lipgloss.NewStyle().
-		Border(lipgloss.ThickBorder(), true, false, false, false), activeCLITheme.border).
-		PaddingLeft(1)
+	// Pinned panels are terminal-native overlays: no floating-card border and no
+	// background fill. Their hierarchy comes from spacing, row markers, and text
+	// colour so they stay close to Amp's compact TUI feel.
+	approvalBannerStyle = lipgloss.NewStyle().PaddingLeft(1)
+	todoPanelStyle = lipgloss.NewStyle().PaddingLeft(1)
 	if colorEnabled {
 		// The status block is rendered at the page's ambient `ink` colour, not
 		// on a `surface` panel. Painting it with `surface` here made the
@@ -455,11 +427,9 @@ func refreshCLIStyles() {
 		workingStyle = lipgloss.NewStyle().Bold(true)
 	}
 	compSelStyle = themeStyle(activeCLITheme.accent).Bold(true)
-	choicePanelStyle = withThemeBorderFG(lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder(), true, false, true, false), activeCLITheme.accent).
-		PaddingLeft(1)
-	scrollThumbStyle = themeStyle(activeCLITheme.accent)
-	scrollTrackStyle = themeStyle(activeCLITheme.faint)
+	choicePanelStyle = lipgloss.NewStyle().PaddingLeft(1)
+	scrollThumbStyle = themeStyle(activeCLITheme.faint)
+	scrollTrackStyle = themeStyle(activeCLITheme.border)
 }
 
 func applyTextareaTheme(ti *textarea.Model) {

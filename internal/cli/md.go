@@ -24,9 +24,10 @@ type mdRenderer struct {
 	width int
 }
 
-// mdLeftMargin is the answer's left gutter — the shared column-4 content axis, so
-// the answer body lines up under the tool verbs and reasoning text.
-const mdLeftMargin = gridIndent
+// mdLeftMargin is the answer's left indent. The amp redesign dropped the shared
+// column-4 content axis (gridIndent) so assistant answers render flush at the left
+// margin — minimal, no gutter — matching amp's label-style message layout.
+const mdLeftMargin = 0
 
 func newMarkdownRenderer(width int) *mdRenderer {
 	if width <= 0 {

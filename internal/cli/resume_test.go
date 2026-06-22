@@ -126,13 +126,13 @@ func TestResumePickerPreviewsOnSelection(t *testing.T) {
 
 	// Default selection is the most recent session (b.jsonl); its data must show
 	// in the rendered picker without pressing Enter.
-	// The preview renders the message as a "› " bubble; the list shows it as a
-	// "N turns · …" label, so match the bubble form to tell them apart.
+	// The preview renders the message as a "You:" labelled block (amp-style); the
+	// list shows it as a "N turns · …" label, so match the preview form.
 	panel := m.renderResumePicker()
-	if !strings.Contains(panel, "› SECOND-SESSION-PREVIEW") {
+	if !strings.Contains(panel, "You: SECOND-SESSION-PREVIEW") {
 		t.Fatalf("picker should preview the selected session immediately:\n%s", panel)
 	}
-	if strings.Contains(panel, "› FIRST-SESSION-PREVIEW") {
+	if strings.Contains(panel, "You: FIRST-SESSION-PREVIEW") {
 		t.Fatalf("picker should not preview the unselected session:\n%s", panel)
 	}
 	// The controller must NOT have switched — preview is read-only until Enter.
@@ -273,19 +273,19 @@ func TestResumeArgCompletionPreviewsSelection(t *testing.T) {
 
 	// Index 1 (default selection) is the most recent session (b.jsonl): its data
 	// must appear in the rendered menu without running the command. The preview
-	// renders as a "› " bubble; the list row uses "N turns · …", so match the bubble.
+	// renders as a "You:" labelled block (amp-style); the list row uses "N turns · …".
 	menu := m.renderCompletion()
-	if !strings.Contains(menu, "› SECOND-ARG-PREVIEW") {
+	if !strings.Contains(menu, "You: SECOND-ARG-PREVIEW") {
 		t.Fatalf("completion should preview the selected session:\n%s", menu)
 	}
-	if strings.Contains(menu, "› FIRST-ARG-PREVIEW") {
+	if strings.Contains(menu, "You: FIRST-ARG-PREVIEW") {
 		t.Fatalf("completion should not preview the unselected session:\n%s", menu)
 	}
 
 	// Moving down to index 2 swaps the preview to the other session.
 	m.moveCompletion(1)
 	menu = m.renderCompletion()
-	if !strings.Contains(menu, "› FIRST-ARG-PREVIEW") {
+	if !strings.Contains(menu, "You: FIRST-ARG-PREVIEW") {
 		t.Fatalf("preview should follow selection to the other session:\n%s", menu)
 	}
 }

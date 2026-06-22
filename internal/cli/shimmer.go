@@ -170,7 +170,7 @@ func gradientColorAt(pos float64, cols ...cliColor) cliColor {
 // roachHeroRows renders the ROACH wordmark with a DIAGONAL foreground gradient
 // (top-left→bottom-right) so the light has one axis — but NO background fill: like
 // the rest of the TUI it sits on the user's own terminal background, only the glyphs
-// are coloured. (An earlier version painted a radial warm halo BEHIND the glyphs; we
+// are coloured. (An earlier version painted a radial halo BEHIND the glyphs; we
 // dropped it with the rest of the background fills so nothing covers the terminal's
 // own colour.) Truecolor gets the per-cell diagonal ramp; otherwise the flat 1-D sweep.
 func roachHeroRows(stops []cliColor) []string {
@@ -196,12 +196,8 @@ func roachHeroRows(stops []cliColor) []string {
 }
 
 // roachHeroShimmerRows renders the ROACH wordmark with its diagonal base gradient
-// PLUS a soft, slow brightness crest that travels diagonally across it as phase
-// advances — the banner's ambient "glow", the static-art analogue of the thinking
-// verb's shimmer(). The crest lightens the base colour toward warm off-white (capped,
-// so it glows rather than blows out) with a wide gaussian, and sweeps over a period a
-// little wider than the art so there's a calm lull between passes. Foreground only,
-// no background.
+// plus a very soft, slow brightness crest. The crest lifts toward muted grey, not
+// near-white, so the welcome mark stays dim and Amp-like on a black canvas.
 //
 // Works in BOTH truecolor AND 256-colour: mixColor degrades to the nearer endpoint's
 // xterm index, so the crest reads as a moving band of brightened cells exactly the way
@@ -225,9 +221,9 @@ func roachHeroShimmerRows(stops []cliColor, phase int) []string {
 		for x := 0; x < len(r); x++ {
 			fgPos := float64(x)/float64(artW)*0.6 + float64(y)/rows*0.4
 			base := gradientColorAt(fgPos, stops...)
-			d := (float64(x) + float64(y)) - center          // mild diagonal axis
-			glow := math.Exp(-(d*d)/(2*sigma*sigma)) * 0.92  // bright crest — clearly lit
-			col := mixColor(base, activeCLITheme.text, glow) // lighten toward warm off-white
+			d := (float64(x) + float64(y)) - center           // mild diagonal axis
+			glow := math.Exp(-(d*d)/(2*sigma*sigma)) * 0.56   // visible, but never poster-bright
+			col := mixColor(base, activeCLITheme.muted, glow) // lift toward muted grey
 			b.WriteString(fgSGR(col) + ansiBold + string(r[x]) + ansiReset)
 		}
 		out[y] = b.String()
