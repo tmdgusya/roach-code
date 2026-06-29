@@ -441,6 +441,80 @@ func TestSubagentApprovalShowsRequester(t *testing.T) {
 	}
 }
 
+// TestSubagentLateUsageDoesNotResurrectPanel reproduces issue #25: a Usage
+// event arriving after a subagent's terminal ToolResult must not recreate a
+// phantom row that ticks its duration forever. Previously recordSubagentUsage
+// auto-created a stub for any parentID, so the panel showed "live N running"
+// with stale subagents long after they finished.
+func TestSubagentLateUsageDoesNotResurrectPanel(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"scan","prompt":"x"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "task1", Name: "task", Output: "done"}})
+
+	if panel := ansi.Strip(m.renderSubagentPanel()); panel != "" {
+		t.Fatalf("panel should be empty after the subagent terminated:\n%s", panel)
+	}
+
+	// Late usage arrives after termination — must NOT recreate the row.
+	m.ingestEvent(event.Event{Kind: event.Usage, ParentID: "task1", Usage: &provider.Usage{TotalTokens: 100, CompletionTokens: 20}})
+	if panel := ansi.Strip(m.renderSubagentPanel()); panel != "" {
+		t.Fatalf("late usage must not resurrect the live panel:\n%s", panel)
+	}
+}
+
+// TestSubagentLateChildDispatchDoesNotResurrectPanel covers the same leak via
+// a child tool dispatch arriving after the parent's terminal result.
+func TestSubagentLateChildDispatchDoesNotResurrectPanel(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"scan","prompt":"x"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "task1", Name: "task", Output: "done"}})
+
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1/late", ParentID: "task1", Name: "read_file", Args: `{"path":"a.go"}`}})
+	if panel := ansi.Strip(m.renderSubagentPanel()); panel != "" {
+		t.Fatalf("late child dispatch must not resurrect the live panel:\n%s", panel)
+	}
+}
+
+// TestTurnDoneClearsStaleSubagentPanel guards the safety sweep: even if a row
+// is left behind (missed terminal event, cancelled turn), TurnDone must drop
+// it so the next idle view doesn't show "live N running" with ghosts (#25).
+func TestTurnDoneClearsStaleSubagentPanel(t *testing.T) {
+	m := newTestChatTUI()
+	// Two dispatched subagents whose terminal ToolResult never arrives — the
+	// exact leak the issue screenshot shows ("live 6 running" after completion).
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"stale one","prompt":"x"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task2", Name: "task", Args: `{"description":"stale two","prompt":"x"}`}})
+
+	if panel := ansi.Strip(m.renderSubagentPanel()); !strings.Contains(panel, "SUBAGENTS live 2 running") {
+		t.Fatalf("precondition: in-flight subagents should render a live panel:\n%s", panel)
+	}
+
+	m.ingestEvent(event.Event{Kind: event.TurnDone})
+	if panel := ansi.Strip(m.renderSubagentPanel()); panel != "" {
+		t.Fatalf("TurnDone should clear stale subagent rows:\n%s", panel)
+	}
+}
+
+// TestNewSessionClearsStaleSubagentPanel guards the /new sweep: starting a new
+// session must drop the prior session's subagent rows (#25).
+func TestNewSessionClearsStaleSubagentPanel(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "task1", Name: "task", Args: `{"description":"stale one","prompt":"x"}`}})
+
+	if panel := ansi.Strip(m.renderSubagentPanel()); !strings.Contains(panel, "SUBAGENTS live 1 running") {
+		t.Fatalf("precondition: in-flight subagent should render a live panel:\n%s", panel)
+	}
+
+	// Reset live state the same way /new does (chat_commands.go).
+	m.ensureSubagentRuns()
+	for id := range m.subagents {
+		delete(m.subagents, id)
+	}
+	if panel := ansi.Strip(m.renderSubagentPanel()); panel != "" {
+		t.Fatalf("new session should clear stale subagent rows:\n%s", panel)
+	}
+}
+
 // TestReasoningViewBounded proves the live thinking view stays bounded under a
 // long stream — the fix for the O(n²)/multi-GB re-render of the full thought.
 func TestReasoningViewBounded(t *testing.T) {
